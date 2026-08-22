@@ -563,7 +563,7 @@ A evolução do sistema deverá ocorrer de maneira incremental, mantendo o foco 
 
 O ArterIA nasce da convergência entre três áreas:
 
-      RADIOLOGIA
+   RADIOLOGIA
           +
    ANÁLISE DE IMAGENS
           +
