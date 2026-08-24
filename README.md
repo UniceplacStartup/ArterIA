@@ -1,106 +1,8 @@
 # 🫀 ArterIA
 
-<<<<<<< HEAD
-Sistema de Apoio ao Diagnóstico Radiológico por IA — front-end desenvolvido em React + TypeScript + Vite + Material UI.
+**Plataforma de apoio à análise de mamografias e à classificação da calcificação arterial mamária.**
 
-## Stack utilizada
-
-- React 19
-- TypeScript
-- Vite
-- React Router DOM
-- Material UI (MUI)
-- Axios
-- React Hook Form + Zod
-- TanStack Query (React Query)
-- Zustand
-- React Dropzone
-- React Hot Toast
-- Day.js
-- Lucide React
-- ESLint + Prettier
-
-## Pré-requisitos
-
-Antes de começar, você precisa ter instalado:
-
-- Node.js (versão 18 ou superior) — https://nodejs.org/
-- Git — https://git-scm.com/
-
-Para conferir se já tem o Node instalado, rode no terminal:
-
-```bash
-node -v
-```
-
-## Como instalar e rodar o projeto
-
-1. Clone o repositório
-
-```bash
-git clone https://github.com/UniceplacStartup/ArterIA.git
-```
-
-2. Entre na pasta do projeto
-
-```bash
-cd ArterIA
-```
-
-3. Instale as dependências
-
-```bash
-npm install
-```
-
-4. Rode o projeto em modo de desenvolvimento
-
-```bash
-npm run dev
-```
-
-O terminal vai mostrar um link parecido com este:
-
-```
-Local:   http://localhost:5173/
-```
-
-Abra esse endereço no navegador para visualizar o projeto.
-
-## Telas disponíveis
-
-| Rota                      | Descrição                          |
-|----------------------------|-------------------------------------|
-| /cadastro-profissional     | Cadastro do profissional (médico)  |
-| /cadastro-paciente         | Cadastro de novo paciente           |
-
-Acessando a raiz do projeto (/), você é redirecionado automaticamente para /cadastro-profissional.
-
-## Build de produção
-
-Para gerar a versão de produção do projeto:
-
-```bash
-npm run build
-```
-
-Os arquivos finais são gerados na pasta dist/.
-
-## Lint
-
-Para checar o padrão de código do projeto:
-
-```bash
-npm run lint
-```
-=======
-<p align="center">
-  <strong>Plataforma de apoio à análise de mamografias e à classificação da calcificação arterial mamária.</strong>
-</p>
-
-<p align="center">
-  Radiologia • Análise de Imagens • Apoio à Análise Clínica
-</p>
+Radiologia • Análise de Imagens • Apoio à Análise Clínica
 
 ---
 
@@ -111,8 +13,8 @@ npm run lint
 - [❗ O Problema](#-o-problema)
 - [💡 A Solução Proposta](#-a-solução-proposta)
 - [🎯 Objetivo do Projeto](#-objetivo-do-projeto)
-  - [Objetivo Geral](#objetivo-geral)
-  - [Objetivos Específicos](#objetivos-específicos)
+  * [Objetivo Geral](#objetivo-geral)
+  * [Objetivos Específicos](#objetivos-específicos)
 - [📌 Justificativa](#-justificativa)
 - [👥 Público de Interesse](#-público-de-interesse)
 - [🎯 Escopo do Projeto](#-escopo-do-projeto)
@@ -127,6 +29,7 @@ npm run lint
 - [🚫 Fora do Escopo](#-fora-do-escopo)
 - [⚠️ Limitações e Responsabilidade Clínica](#️-limitações-e-responsabilidade-clínica)
 - [🔮 Visão de Evolução](#-visão-de-evolução)
+- [Instalação e Execução (Front-end)](#instalação-e-execução-front-end)
 - [🫀 Visão do ArterIA](#-visão-do-arteria)
 
 ---
@@ -141,11 +44,11 @@ Além da análise individual dos exames, a plataforma deverá permitir a organiz
 
 A classificação inicial prevista pelo projeto será organizada em três níveis:
 
-| Classificação | Nível |
-|:---:|---|
-| 🟢 | **Leve** |
-| 🟡 | **Moderada** |
-| 🔴 | **Acentuada** |
+| Classificação | Nível         |
+| ------------- | ------------- |
+| 🟢             | **Leve**      |
+| 🟡             | **Moderada**  |
+| 🔴             | **Acentuada** |
 
 > **Importante:** O ArterIA é concebido como uma ferramenta de **apoio à análise clínica**. O sistema não tem como objetivo substituir a avaliação, interpretação ou responsabilidade de profissionais habilitados.
 
@@ -218,14 +121,14 @@ flowchart LR
 
 A relação entre essas etapas permitirá manter a rastreabilidade das informações dentro do sistema.
 
-| Etapa | Função |
-|---|---|
-| 👤 **Paciente** | Identificação da pessoa vinculada aos registros. |
-| 🩻 **Exame** | Registro correspondente à realização da mamografia. |
-| 🖼️ **Mamografia** | Imagem ou conjunto de imagens associado ao exame. |
-| 🔍 **Análise** | Processo responsável pela avaliação das características de interesse. |
-| 📊 **Resultado** | Registro da classificação obtida após a análise. |
-| 📚 **Histórico** | Organização cronológica dos exames e resultados associados ao paciente. |
+| Etapa             | Função                                                                  |
+| ----------------- | ----------------------------------------------------------------------- |
+| 👤 **Paciente**    | Identificação da pessoa vinculada aos registros.                        |
+| 🩻 **Exame**       | Registro correspondente à realização da mamografia.                     |
+| 🖼️ **Mamografia** | Imagem ou conjunto de imagens associado ao exame.                       |
+| 🔍 **Análise**     | Processo responsável pela avaliação das características de interesse.   |
+| 📊 **Resultado**   | Registro da classificação obtida após a análise.                        |
+| 📚 **Histórico**   | Organização cronológica dos exames e resultados associados ao paciente. |
 
 ---
 
@@ -432,16 +335,16 @@ flowchart LR
 
 Cada etapa possui uma responsabilidade específica.
 
-| Etapa | Descrição |
-|---|---|
-| 🖼️ **Recepção** | Recebimento da imagem associada ao exame. |
-| ✔️ **Validação** | Verificação das condições necessárias para continuidade do fluxo. |
-| ⚙️ **Preparação** | Organização da imagem para o procedimento de análise. |
-| 🔍 **Análise** | Avaliação das características relacionadas ao objetivo do sistema. |
-| 📏 **Avaliação** | Aplicação dos parâmetros e critérios definidos. |
-| 📊 **Classificação** | Organização do resultado conforme os níveis estabelecidos. |
-| 📋 **Resultado** | Registro das informações produzidas durante o processo. |
-| 📚 **Histórico** | Associação do resultado ao paciente e ao exame correspondente. |
+| Etapa               | Descrição                                                          |
+| ------------------- | ------------------------------------------------------------------ |
+| 🖼️ **Recepção**     | Recebimento da imagem associada ao exame.                          |
+| ✔️ **Validação**    | Verificação das condições necessárias para continuidade do fluxo.  |
+| ⚙️ **Preparação**   | Organização da imagem para o procedimento de análise.              |
+| 🔍 **Análise**       | Avaliação das características relacionadas ao objetivo do sistema. |
+| 📏 **Avaliação**     | Aplicação dos parâmetros e critérios definidos.                    |
+| 📊 **Classificação** | Organização do resultado conforme os níveis estabelecidos.         |
+| 📋 **Resultado**     | Registro das informações produzidas durante o processo.            |
+| 📚 **Histórico**     | Associação do resultado ao paciente e ao exame correspondente.     |
 
 > Os critérios clínicos e quantitativos utilizados no processo de classificação deverão ser definidos e validados com especialistas responsáveis pelo domínio.
 
@@ -463,12 +366,12 @@ flowchart LR
 
 Essa estrutura permitirá estabelecer uma relação clara entre as informações.
 
-| Elemento | Responsabilidade |
-|---|---|
-| 👤 **Paciente** | Centraliza os registros associados à pessoa. |
-| 🩻 **Exame** | Representa uma realização específica de mamografia. |
-| 🖼️ **Imagem** | Representa o arquivo utilizado no processo de análise. |
-| 🔍 **Análise** | Representa o processo executado sobre a imagem. |
+| Elemento        | Responsabilidade                                          |
+| --------------- | --------------------------------------------------------- |
+| 👤 **Paciente**  | Centraliza os registros associados à pessoa.              |
+| 🩻 **Exame**     | Representa uma realização específica de mamografia.       |
+| 🖼️ **Imagem**   | Representa o arquivo utilizado no processo de análise.    |
+| 🔍 **Análise**   | Representa o processo executado sobre a imagem.           |
 | 📊 **Resultado** | Registra a classificação e demais informações produzidas. |
 
 Um paciente poderá possuir múltiplos exames ao longo do tempo, permitindo a construção de um histórico organizado.
@@ -479,11 +382,11 @@ Um paciente poderá possuir múltiplos exames ao longo do tempo, permitindo a co
 
 A classificação inicial do ArterIA será organizada em três níveis.
 
-| Indicador | Classificação | Descrição |
-|:---:|---|---|
-| 🟢 | **Leve** | Menor nível de classificação identificado de acordo com os critérios definidos para o projeto. |
-| 🟡 | **Moderada** | Nível intermediário identificado durante o processo de análise. |
-| 🔴 | **Acentuada** | Maior nível de classificação identificado de acordo com os critérios estabelecidos. |
+| Indicador | Classificação | Descrição                                                                                      |
+| --------- | ------------- | ---------------------------------------------------------------------------------------------- |
+| 🟢         | **Leve**      | Menor nível de classificação identificado de acordo com os critérios definidos para o projeto. |
+| 🟡         | **Moderada**  | Nível intermediário identificado durante o processo de análise.                                |
+| 🔴         | **Acentuada** | Maior nível de classificação identificado de acordo com os critérios estabelecidos.            |
 
 > **Importante:** os critérios quantitativos, clínicos e radiológicos responsáveis pela definição de cada nível deverão ser estabelecidos e validados pelos especialistas envolvidos no projeto.
 
@@ -497,14 +400,14 @@ Após a conclusão da análise, o sistema deverá apresentar o resultado de form
 
 Uma análise poderá apresentar informações como:
 
-| Informação | Finalidade |
-|---|---|
-| 🩻 **Identificação do exame** | Permitir a localização do registro analisado. |
-| 👤 **Paciente associado** | Identificar o vínculo com o histórico correspondente. |
-| 🔄 **Status da análise** | Informar a situação do processamento. |
-| 📊 **Classificação** | Apresentar o nível identificado. |
-| 📅 **Data da análise** | Registrar o momento da conclusão. |
-| 📚 **Histórico** | Permitir consulta posterior ao resultado. |
+| Informação                   | Finalidade                                            |
+| ---------------------------- | ----------------------------------------------------- |
+| 🩻 **Identificação do exame** | Permitir a localização do registro analisado.         |
+| 👤 **Paciente associado**     | Identificar o vínculo com o histórico correspondente. |
+| 🔄 **Status da análise**      | Informar a situação do processamento.                 |
+| 📊 **Classificação**          | Apresentar o nível identificado.                      |
+| 📅 **Data da análise**        | Registrar o momento da conclusão.                     |
+| 📚 **Histórico**              | Permitir consulta posterior ao resultado.             |
 
 Futuramente, a apresentação poderá ser expandida para incluir:
 
@@ -519,16 +422,16 @@ Futuramente, a apresentação poderá ser expandida para incluir:
 
 A primeira versão do ArterIA deverá concentrar-se nas seguintes funcionalidades:
 
-| Funcionalidade | Descrição |
-|---|---|
-| 🔐 **Acesso ao sistema** | Controle de acesso aos usuários autorizados. |
-| 👤 **Gestão de pacientes** | Cadastro, consulta e organização dos pacientes. |
-| 🩻 **Gestão de exames** | Criação e acompanhamento dos exames registrados. |
-| 🖼️ **Envio de mamografias** | Associação de imagens aos respectivos exames. |
-| ✔️ **Validação** | Verificação das condições necessárias para análise. |
-| 🔍 **Análise** | Execução do fluxo definido para avaliação da imagem. |
-| 📊 **Classificação** | Organização do resultado conforme os níveis definidos. |
-| 📚 **Histórico** | Consulta às análises e exames anteriores. |
+| Funcionalidade              | Descrição                                              |
+| --------------------------- | ------------------------------------------------------ |
+| 🔐 **Acesso ao sistema**     | Controle de acesso aos usuários autorizados.           |
+| 👤 **Gestão de pacientes**   | Cadastro, consulta e organização dos pacientes.        |
+| 🩻 **Gestão de exames**      | Criação e acompanhamento dos exames registrados.       |
+| 🖼️ **Envio de mamografias** | Associação de imagens aos respectivos exames.          |
+| ✔️ **Validação**            | Verificação das condições necessárias para análise.    |
+| 🔍 **Análise**               | Execução do fluxo definido para avaliação da imagem.   |
+| 📊 **Classificação**         | Organização do resultado conforme os níveis definidos. |
+| 📚 **Histórico**             | Consulta às análises e exames anteriores.              |
 
 ---
 
@@ -560,15 +463,15 @@ flowchart TB
 
 ## Organização conceitual dos domínios
 
-| Domínio | Responsabilidade |
-|---|---|
-| 👤 **Gestão de Pacientes** | Organização e consulta das informações relacionadas aos pacientes. |
-| 🩻 **Gestão de Exames** | Registro, organização e acompanhamento dos exames. |
-| 🖼️ **Gestão de Imagens** | Associação das mamografias aos respectivos exames. |
-| 🔍 **Processo de Análise** | Execução do fluxo de avaliação das imagens. |
-| 📊 **Classificação** | Aplicação dos critérios definidos para organização do resultado. |
-| 📈 **Resultados** | Apresentação e registro das informações produzidas. |
-| 📚 **Histórico** | Organização cronológica dos exames e resultados associados ao paciente. |
+| Domínio                   | Responsabilidade                                                        |
+| ------------------------- | ------------------------------------------------------------------------ |
+| 👤 **Gestão de Pacientes** | Organização e consulta das informações relacionadas aos pacientes.      |
+| 🩻 **Gestão de Exames**    | Registro, organização e acompanhamento dos exames.                      |
+| 🖼️ **Gestão de Imagens**  | Associação das mamografias aos respectivos exames.                      |
+| 🔍 **Processo de Análise** | Execução do fluxo de avaliação das imagens.                             |
+| 📊 **Classificação**       | Aplicação dos critérios definidos para organização do resultado.        |
+| 📈 **Resultados**          | Apresentação e registro das informações produzidas.                     |
+| 📚 **Histórico**           | Organização cronológica dos exames e resultados associados ao paciente. |
 
 Essa separação conceitual permite que as responsabilidades do sistema sejam organizadas de maneira clara e facilita a evolução futura do projeto.
 
@@ -698,38 +601,38 @@ A evolução do sistema deverá ocorrer de forma incremental, mantendo o foco in
 
 ---
 
-# 🫀 Visão do ArterIA
+# Instalação e Execução (Front-end)
 
-O ArterIA está fundamentado na integração entre áreas complementares:
+Stack utilizada: React 19, TypeScript, Vite, React Router DOM, Material UI (MUI), Axios, React Hook Form, Zod, TanStack Query, Zustand, React Dropzone, React Hot Toast, Day.js, Lucide React, ESLint e Prettier.
 
-| 🩻 Radiologia | 🖼️ Análise de Imagens | 🧠 Sistemas Inteligentes |
-|---|---|---|
-| Conhecimento e interpretação do contexto dos exames | Avaliação e processamento das informações visuais | Recursos computacionais para apoio à análise e classificação |
+## Pré-requisitos
 
-Essas áreas convergem para um objetivo comum:
+Antes de começar, é necessário ter instalado:
 
-> **Utilizar recursos computacionais para apoiar a análise de mamografias, estruturar informações, padronizar processos e manter a rastreabilidade dos exames e resultados.**
+- Node.js (versão 18 ou superior) — https://nodejs.org/
+- Git — https://git-scm.com/
 
-O propósito do ArterIA não é substituir o conhecimento, a experiência ou a responsabilidade dos profissionais de saúde.
+Para conferir se já tem o Node instalado, rode no terminal:
 
-A proposta é construir uma ferramenta capaz de:
+```bash
+node -v
+```
 
-- Organizar informações;
-- Estruturar o fluxo de análise;
-- Apoiar a identificação de características de interesse;
-- Aplicar critérios de classificação definidos;
-- Apresentar resultados de maneira clara;
-- Manter um histórico estruturado para consultas futuras.
+## Como instalar e rodar o projeto
 
----
+1. Clone o repositório
 
-<p align="center">
+```bash
+git clone https://github.com/UniceplacStartup/ArterIA.git
+```
 
-# 🫀 ArterIA
+2. Entre na pasta do projeto
 
-### Tecnologia e análise de imagens aplicadas ao apoio à avaliação de mamografias.
+```bash
+cd ArterIA
+```
 
-**Projeto em desenvolvimento.**
+3. Instale as dependências
 
-</p>
->>>>>>> b7a10a203496930be41816226977c924b34fe198
+```bash
+npm
