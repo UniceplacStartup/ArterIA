@@ -603,22 +603,25 @@ A evolução do sistema deverá ocorrer de forma incremental, mantendo o foco in
 
 # Instalação e Execução (Front-end)
 
-Stack utilizada: React 19, TypeScript, Vite, React Router DOM, Material UI (MUI), Axios, React Hook Form, Zod, TanStack Query, Zustand, React Dropzone, React Hot Toast, Day.js, Lucide React, ESLint e Prettier.
+## Stack utilizada
+
+React 19, TypeScript, Vite, React Router DOM, Material UI (MUI), Axios, React Hook Form, Zod, TanStack Query, Zustand, React Dropzone, React Hot Toast, Day.js, Lucide React, ESLint e Prettier.
 
 ## Pré-requisitos
 
-Antes de começar, é necessário ter instalado:
-
-- Node.js (versão 18 ou superior) — https://nodejs.org/
+- Node.js versão 18 ou superior — https://nodejs.org/
+- npm (instalado junto com o Node)
 - Git — https://git-scm.com/
 
-Para conferir se já tem o Node instalado, rode no terminal:
+Para conferir as versões instaladas:
 
 ```bash
 node -v
+npm -v
+git --version
 ```
 
-## Como instalar e rodar o projeto
+## Passo a passo de instalação
 
 1. Clone o repositório
 
@@ -635,4 +638,90 @@ cd ArterIA
 3. Instale as dependências
 
 ```bash
-npm
+npm install --legacy-peer-deps
+```
+
+> **Por que `--legacy-peer-deps`:** o projeto atualmente tem um conflito de versão entre `@mui/material` (v5) e `@mui/icons-material` (v9), que exige `@mui/material` v9. Até essa divergência ser corrigida no `package.json`, a instalação normal (`npm install` sem a flag) falha com erro `ERESOLVE`. Use sempre essa flag ao instalar ou reinstalar dependências neste projeto.
+
+4. Rode o projeto em modo de desenvolvimento
+
+```bash
+npm run dev
+```
+
+O terminal deve mostrar algo como:
+
+```
+VITE vX.X.X  ready in XXX ms
+Local:   http://localhost:5173/
+```
+
+Abra esse endereço no navegador.
+
+## Rotas disponíveis
+
+| Rota                        | Descrição                                    |
+| ---------------------------- | --------------------------------------------- |
+| `/`                          | Redireciona automaticamente para `/dashboard` |
+| `/dashboard`                 | Dashboard principal                           |
+| `/resultado/:exameId`        | Detalhe do resultado de um exame              |
+| `/cadastro-profissional`     | Cadastro do profissional (médico)             |
+| `/cadastro-paciente`         | Cadastro de novo paciente                     |
+
+## Build de produção
+
+```bash
+npm run build
+```
+
+Os arquivos finais são gerados na pasta `dist/`.
+
+## Lint
+
+```bash
+npm run lint
+```
+
+## Problemas comuns
+
+**Erro `ERESOLVE` ao rodar `npm install`:**
+Use `npm install --legacy-peer-deps` (veja a nota no passo 3).
+
+**Erro `Failed to resolve dependency: cornerstone-core` / `cornerstone-tools`:**
+Rode `npm install --legacy-peer-deps` novamente — essas dependências fazem parte do módulo de visualização de imagens DICOM (`src/pages/Resultado/DicomViewer.tsx`) e só aparecem depois que o `package.json` mais recente é instalado corretamente.
+
+**Depois de puxar mudanças da `main` (`git pull`) e o projeto parar de rodar:**
+Rode `npm install --legacy-peer-deps` de novo — provavelmente alguém adicionou uma dependência nova que ainda não está no seu `node_modules`.
+
+---
+
+# 🫀 Visão do ArterIA
+
+O ArterIA está fundamentado na integração entre áreas complementares:
+
+| 🩻 Radiologia                                        | 🖼️ Análise de Imagens                             | 🧠 Sistemas Inteligentes                                      |
+| ----------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------- |
+| Conhecimento e interpretação do contexto dos exames | Avaliação e processamento das informações visuais | Recursos computacionais para apoio à análise e classificação |
+
+Essas áreas convergem para um objetivo comum:
+
+> **Utilizar recursos computacionais para apoiar a análise de mamografias, estruturar informações, padronizar processos e manter a rastreabilidade dos exames e resultados.**
+
+O propósito do ArterIA não é substituir o conhecimento, a experiência ou a responsabilidade dos profissionais de saúde.
+
+A proposta é construir uma ferramenta capaz de:
+
+- Organizar informações;
+- Estruturar o fluxo de análise;
+- Apoiar a identificação de características de interesse;
+- Aplicar critérios de classificação definidos;
+- Apresentar resultados de maneira clara;
+- Manter um histórico estruturado para consultas futuras.
+
+---
+
+# 🫀 ArterIA
+
+### Tecnologia e análise de imagens aplicadas ao apoio à avaliação de mamografias.
+
+**Projeto em desenvolvimento.**
