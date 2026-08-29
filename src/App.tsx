@@ -7,8 +7,8 @@ import { DashboardLayout } from '@/layouts/DashboardLayout';
 import { LoadingScreen } from '@/components/Loading/LoadingScreen';
 import Dashboard from '@/pages/Dashboard/Dashboard';
 import ExameDetalhe from '@/pages/Resultado/ExameDetalhe';
-import CadastroProfissional from './pages/CadastroProfissional';
-import CadastroPaciente from './pages/CadastroPaciente';
+import CadastroProfissional from './pages/CadastroProfissional/TelaCadastroProfissional';
+import CadastroPaciente from './pages/CadastroPaciente/TelaCadastroPaciente';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
