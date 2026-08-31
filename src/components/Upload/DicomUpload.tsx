@@ -11,7 +11,11 @@ interface DicomUploadProps {
 export function DicomUpload({ value, onChange, error }: DicomUploadProps) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     multiple: false,
-    accept: { 'application/dicom': ['.dcm'] },
+    accept: { 'application/dicom': ['.dcm'],
+      'image/png': ['.png'],
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'application/pdf': ['.pdf'],
+    },
     onDrop: (acceptedFiles) => {
       if (acceptedFiles[0]) onChange(acceptedFiles[0]);
     },
@@ -20,7 +24,7 @@ export function DicomUpload({ value, onChange, error }: DicomUploadProps) {
   return (
     <Box>
       <Typography variant="body2" fontWeight={600} mb={0.5}>
-        Upload de Exame (DICOM)
+        Upload de Exame (DICOM) — modo teste: .dcm, .png, .jpg, .pdf
       </Typography>
 
       <Box
