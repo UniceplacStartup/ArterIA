@@ -9,6 +9,9 @@ import Dashboard from '@/pages/Dashboard/Dashboard';
 import ExameDetalhe from '@/pages/Resultado/ExameDetalhe';
 import CadastroProfissional from './pages/CadastroProfissional/TelaCadastroProfissional';
 import CadastroPaciente from './pages/CadastroPaciente/TelaCadastroPaciente';
+import TelaLogin from './pages/Login/TelaLogin';
+import TelaLoginProfissional from './pages/Login/TelaLoginProfissional';
+import TelaLoginPaciente from './pages/Login/TelaLoginPaciente';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -22,7 +25,11 @@ function App() {
         <BrowserRouter>
           <Suspense fallback={<LoadingScreen />}>
             <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/" element={<Navigate to="/login" replace />} />
+
+              <Route path="/login" element={<TelaLogin />} />
+              <Route path="/login-profissional" element={<TelaLoginProfissional />} />
+              <Route path="/login-paciente" element={<TelaLoginPaciente />} />
 
               <Route element={<DashboardLayout />}>
                 <Route path="/dashboard" element={<Dashboard />} />
