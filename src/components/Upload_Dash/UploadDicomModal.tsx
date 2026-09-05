@@ -15,7 +15,7 @@ import { UploadCloud } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { colors } from '@/theme/theme';
-import { pareceDicomValido } from '@/schemas/uploadSchema';
+import { pareceDicomValido, EXTENSOES_ACEITAS_TESTE } from '@/schemas/uploadSchema';
 import { useUploadExame } from '@/hooks/useExame';
 import type { Paciente } from '@/types';
 
@@ -25,7 +25,7 @@ interface Props {
   pacientes: Paciente[];
 }
 
-const CEM_MB = 100 * 1024 * 1024;
+const TAMANHO_MAX_TESTE_MB = 100 * 1024 * 1024;
 
 // RE01 
 export function UploadDicomModal({ open, onClose, pacientes }: Props) {
@@ -34,25 +34,25 @@ export function UploadDicomModal({ open, onClose, pacientes }: Props) {
   const navigate = useNavigate();
   const { mutateAsync: enviarUpload, isPending } = useUploadExame();
 
-  const onDrop = useCallback(async (accepted: File[], rejected: unknown[]) => {
+    const onDrop = useCallback(async (accepted: File[], rejected: unknown[]) => {
     if (rejected.length > 0 || accepted.length === 0) {
-      toast.error('Arquivo inválido. Apenas arquivos DICOM (.dcm) são aceitos.');
+      toast.error(`Arquivo inválido. Aceitos (Apenas para teste): ${EXTENSOES_ACEITAS_TESTE.join(', ')}.`);
       return;
     }
 
     const file = accepted[0];
 
-    
-    if (!file.name.toLowerCase().endsWith('.dcm')) {
-      toast.error('Arquivo inválido. Apenas arquivos DICOM (.dcm) são aceitos.');
+    // Modo TESTE: aceita extensões mais leves além do .dcm
+    if (!EXTENSOES_ACEITAS_TESTE.some((ext) => file.name.toLowerCase().endsWith(ext))) {
+      toast.error(`Arquivo inválido. Aceitos (Apenas para teste): ${EXTENSOES_ACEITAS_TESTE.join(', ')}.`);
       return;
     }
-    
-    if (file.size > CEM_MB) {
-      toast.error('Arquivo excede o limite de 100 MB permitido por exame.');
+
+    if (file.size > TAMANHO_MAX_TESTE_MB) {
+      toast.error('Arquivo excede o limite de 100 MB permitido.');
       return;
     }
-   
+
     const valido = await pareceDicomValido(file);
     if (!valido) {
       toast.error('Arquivo corrompido ou fora do padrão DICOM.');
@@ -65,7 +65,12 @@ export function UploadDicomModal({ open, onClose, pacientes }: Props) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     multiple: false,
-    accept: { 'application/dicom': ['.dcm'] },
+    accept: {
+      'application/dicom': ['.dcm'],
+      'image/png': ['.png'],
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'application/pdf': ['.pdf'],
+    },
   });
 
   async function handleEnviar() {
@@ -119,7 +124,7 @@ export function UploadDicomModal({ open, onClose, pacientes }: Props) {
             {arquivo ? arquivo.name : 'Arraste o arquivo .dcm aqui ou clique para selecionar'}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Somente arquivos DICOM (.dcm), até 100 MB
+            Para teste: .dcm, .png, .jpg, .pdf — até 100 MB
           </Typography>
         </Box>
       </DialogContent>
