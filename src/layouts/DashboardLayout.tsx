@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { Box, AppBar, Toolbar, Avatar, Typography, IconButton, Stack } from '@mui/material';
 import { Settings, LogOut, UserRound } from 'lucide-react';
 import { colors } from '@/theme/theme';
@@ -7,6 +7,12 @@ import { useAuthStore } from '@/stores/authStore';
 export function DashboardLayout() {
   const usuario = useAuthStore((s) => s.usuario);
   const logout = useAuthStore((s) => s.logout);
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: colors.wine50 }}>
@@ -26,7 +32,7 @@ export function DashboardLayout() {
               </Typography>
               <Typography
                 variant="caption"
-                onClick={logout}
+                onClick={handleLogout}
                 sx={{ cursor: 'pointer', color: colors.wine100, '&:hover': { textDecoration: 'underline' } }}
               >
                 Sair
@@ -38,7 +44,7 @@ export function DashboardLayout() {
             <IconButton sx={{ color: '#fff' }} aria-label="Configurações">
               <Settings size={20} />
             </IconButton>
-            <IconButton sx={{ color: '#fff' }} aria-label="Sair" onClick={logout}>
+            <IconButton sx={{ color: '#fff' }} aria-label="Sair" onClick={handleLogout}>
               <LogOut size={20} />
             </IconButton>
           </Stack>

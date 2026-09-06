@@ -17,10 +17,12 @@ export const cadastroPacienteSchema = z.object({
     .min(1, 'E-mail é obrigatório')
     .email('E-mail inválido'),
   exame: z
-    .instanceof(File, { message: 'Selecione um arquivo de exame (DICOM)' })
+    .instanceof(File)
     .refine((file) => file.name.toLowerCase().endsWith('.dcm'), {
       message: 'O arquivo deve estar no formato DICOM (.dcm)',
-    }),
+    })
+    .nullable()
+    .optional(),
 });
 
 export type CadastroPacienteFormData = z.infer<typeof cadastroPacienteSchema>;

@@ -171,7 +171,7 @@ export default function CadastroProfissional() {
 
             <Typography textAlign="center" fontSize="0.9rem">
               Já possui uma conta?{' '}
-              <MuiLink href="/login" color="#a3226e" fontWeight={600}>
+              <MuiLink href="/login-profissional" color="#a3226e" fontWeight={600}>
                 Fazer login
               </MuiLink>
             </Typography>
