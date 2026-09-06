@@ -102,6 +102,7 @@ export default function TelaLoginProfissional() {
                 '&:hover': { backgroundColor: '#861b5a' },
               }}
             >
+            <MuiLink href="/dashboard" color="#a3226e" fontWeight={600}></MuiLink>
               Entrar
             </Button>
 
