@@ -1,0 +1,14 @@
+{
+  "include": ["backend"],
+  "exclude": ["**/node_modules", "**/__pycache__", "**/.venv", "frontend"],
+  "extraPaths": ["backend"],
+  "executionEnvironments": [
+    {
+      "root": "backend",
+      "extraPaths": ["backend"]
+    }
+  ],
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "warning"
+}
+

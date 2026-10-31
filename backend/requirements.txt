@@ -1,0 +1,28 @@
+# ==============================================================================
+# DEPENDÊNCIAS DO BACKEND ARTERIA (Python 3.11+)
+# ==============================================================================
+
+# Framework Web de Alta Performance
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.32.0,<1.0.0
+python-multipart>=0.0.12,<1.0.0
+
+# Banco de Dados PostgreSQL (Compatível com Neon Serverless Postgres)
+sqlalchemy>=2.0.36,<3.0.0
+psycopg[binary,pool]>=3.2.3,<4.0.0
+alembic>=1.14.0,<2.0.0
+
+# Validação de Dados e Configurações
+pydantic>=2.10.0,<3.0.0
+pydantic-settings>=2.6.0,<3.0.0
+email-validator>=2.2.0,<3.0.0
+
+# Segurança, Criptografia (LGPD) e Autenticação JWT
+cryptography>=43.0.3,<45.0.0
+python-jose[cryptography]>=3.3.0,<4.0.0
+bcrypt>=4.2.0,<5.0.0
+
+# Inteligência Artificial (Google Gemini API Gratuita) e Processamento de Imagens Médicas
+httpx>=0.27.0,<1.0.0
+Pillow>=10.4.0,<12.0.0
+pydicom>=3.0.0,<4.0.0

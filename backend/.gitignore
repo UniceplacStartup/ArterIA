@@ -1,0 +1,28 @@
+# Ambientes virtuais e cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Segredos e variáveis de ambiente (CRÍTICO DE SEGURANÇA)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Cofre de arquivos médicos DICOM (Dados Sensíveis de Pacientes - PHI)
+storage/
+*.dcm
+*.pdf
+
+# Banco local de fallback (se utilizado em testes)
+*.db
+*.sqlite3
+
