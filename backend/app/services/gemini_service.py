@@ -448,6 +448,42 @@ class GeminiAnalysisService:
         except Exception:
             return None, "Exame DICOM mamográfico."
 
+    @staticmethod
+    def _invocar_gemini_rest(
+        api_key: str,
+        modelo: str,
+        payload: Dict[str, Any],
+        timeout: float = 30.0,
+    ) -> Dict[str, Any]:
+        """
+        Invoca a API REST do Google Gemini suportando tanto chaves do Google AI Studio (`AIza...`)
+        quanto chaves do Google Cloud / Vertex AI Express (`AQ....`).
+        """
+        urls = [
+            f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent",
+            f"https://aiplatform.googleapis.com/v1/publishers/google/models/{modelo}:generateContent",
+        ]
+        if api_key.startswith("AQ."):
+            urls.reverse()
+
+        ultimo_erro: Optional[Exception] = None
+        for url in urls:
+            try:
+                with httpx.Client(timeout=timeout) as client:
+                    resposta = client.post(
+                        url,
+                        params={"key": api_key},
+                        headers={"x-goog-api-key": api_key},
+                        json=payload,
+                    )
+                    resposta.raise_for_status()
+                    return resposta.json()
+            except Exception as exc:
+                ultimo_erro = exc
+        if ultimo_erro:
+            raise ultimo_erro
+        raise RuntimeError("Falha ao comunicar com os endpoints Gemini.")
+
     def analisar_exame_com_gemini(
         self,
         caminho_arquivo: Optional[Path],
@@ -581,18 +617,12 @@ class GeminiAnalysisService:
 
             for modelo_tentativa in cadeia_modelos:
                 try:
-                    url = (
-                        f"https://generativelanguage.googleapis.com/v1beta/models/"
-                        f"{modelo_tentativa}:generateContent"
+                    dados_json = self._invocar_gemini_rest(
+                        api_key=api_key,
+                        modelo=modelo_tentativa,
+                        payload=payload,
+                        timeout=30.0,
                     )
-                    with httpx.Client(timeout=30.0) as client:
-                        resposta = client.post(
-                            url,
-                            params={"key": api_key},
-                            json=payload,
-                        )
-                        resposta.raise_for_status()
-                        dados_json = resposta.json()
 
                     texto_gerado = (
                         dados_json["candidates"][0]["content"]["parts"][0]["text"]
@@ -809,14 +839,12 @@ class GeminiAnalysisService:
 
             for modelo in [settings.GEMINI_MODEL or "gemini-2.5-pro", "gemini-2.5-flash"]:
                 try:
-                    url = (
-                        f"https://generativelanguage.googleapis.com/v1beta/models/"
-                        f"{modelo}:generateContent"
+                    dados = self._invocar_gemini_rest(
+                        api_key=api_key,
+                        modelo=modelo,
+                        payload=payload,
+                        timeout=20.0,
                     )
-                    with httpx.Client(timeout=20.0) as client:
-                        resp = client.post(url, params={"key": api_key}, json=payload)
-                        resp.raise_for_status()
-                        dados = resp.json()
                     texto_ia = dados["candidates"][0]["content"]["parts"][0]["text"]
                     return limpar_formatacao_assistente(texto_ia)
                 except Exception as exc:
