@@ -86,6 +86,12 @@ class Settings(BaseSettings):
         elif url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+psycopg://", 1)
 
+        if self.ENVIRONMENT.lower() != "production" and url.startswith("postgresql"):
+            import importlib.util
+
+            if importlib.util.find_spec("psycopg") is None:
+                return "sqlite:///./arteria_dev_vault.db"
+
         if "neon.tech" in url and "sslmode=" not in url:
             separador = "&" if "?" in url else "?"
             url = f"{url}{separador}sslmode=require"

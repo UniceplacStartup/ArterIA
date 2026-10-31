@@ -37,8 +37,7 @@ async def lifespan(_app: FastAPI):
     logger.info("Iniciando %s no ambiente [%s]...", settings.APP_NAME, settings.ENVIRONMENT)
     try:
         Base.metadata.create_all(bind=engine)
-        if settings.ENVIRONMENT.lower() != "production":
-            popular_dados_iniciais()
+        popular_dados_iniciais()
         logger.info("Banco de dados inicializado e pronto para uso.")
     except Exception as exc:
         logger.warning(
@@ -67,10 +66,11 @@ def criar_aplicacao() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # 1. Middleware de CORS restrito apenas às origens autorizadas no .env
+    # 1. Middleware de CORS restrito às origens autorizadas no .env e domínios Vercel
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
+        allow_origin_regex=r"https://.*\.vercel\.app",
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
