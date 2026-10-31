@@ -1,15 +1,17 @@
 /**
  * Configurações de Ambiente do Frontend ArterIA.
- *
- * Permite alternar de forma limpa entre:
- * - Modo API Real (`VITE_USE_MOCKS=false`): conecta ao Backend Python (FastAPI) + Neon Postgres.
- * - Modo Simulação (`VITE_USE_MOCKS=true`): utiliza mocks em memória para demonstração rápida.
+ * Normaliza automaticamente `VITE_API_URL` para garantir que termine sempre com `/api`.
  */
 
-export const API_BASE_URL =
-  import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api';
+function normalizarApiUrl(rawUrl?: string): string {
+  const base = (rawUrl ?? 'http://localhost:8000/api').trim().replace(/\/+$/, '');
+  if (!base) return 'http://localhost:8000/api';
+  return base.endsWith('/api') ? base : `${base}/api`;
+}
 
-export const USE_MOCKS = import.meta.env.VITE_USE_MOCKS !== 'false';
+export const API_BASE_URL = normalizarApiUrl(import.meta.env.VITE_API_URL);
+
+export const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true';
 
 /** Utilitário para simular latência de rede quando em modo de demonstração (`USE_MOCKS=true`). */
 export function delay(ms: number): Promise<void> {

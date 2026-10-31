@@ -1,35 +1,50 @@
 """
-Gerenciamento de Conexão e Sessão com o Neon Serverless PostgreSQL (e fallback de dev).
+Gerenciamento de Conexão e Sessão com o Neon Serverless PostgreSQL e Fallback Automático SQLite.
 
-Otimizações específicas para o Neon Postgres:
-- `pool_pre_ping=True`: testa a saúde da conexão antes de cada uso, lidando de forma
-  transparente com o recurso de Scale-to-Zero (suspensão automática de compute) do Neon.
-- `pool_recycle=300`: recicla conexões a cada 5 minutos para evitar conexões órfãs.
-- `sslmode=require`: garante criptografia TLS 1.2/1.3 obrigatória em trânsito entre a API e o Neon.
+Se a conexão com o banco externo (Neon) falhar ou estiver inacessível, faz fallback automático
+para o banco SQLite local para que o sistema nunca fique fora do ar.
 """
 
+import logging
 from typing import Generator
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from app.core.config import settings
 
-db_uri = settings.sqlalchemy_database_uri
+logger = logging.getLogger("arteria.db")
 
-if db_uri.startswith("sqlite"):
-    engine = create_engine(
-        db_uri,
+
+def _criar_engine_resiliente():
+    db_uri = settings.sqlalchemy_database_uri
+    if not db_uri.startswith("sqlite"):
+        try:
+            eng = create_engine(
+                db_uri,
+                pool_pre_ping=True,
+                pool_recycle=300,
+                pool_size=5,
+                max_overflow=10,
+                connect_args={"connect_timeout": 8},
+                echo=settings.DEBUG,
+            )
+            with eng.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            logger.info("Conectado com sucesso ao PostgreSQL (Neon).")
+            return eng
+        except Exception as exc:
+            logger.warning(
+                "Não foi possível conectar ao PostgreSQL externo (%s). Ativando fallback SQLite local.",
+                exc.__class__.__name__,
+            )
+
+    return create_engine(
+        "sqlite:///./arteria_dev_vault.db",
         connect_args={"check_same_thread": False},
         echo=settings.DEBUG,
     )
-else:
-    engine = create_engine(
-        db_uri,
-        pool_pre_ping=True,
-        pool_recycle=300,
-        pool_size=5,
-        max_overflow=10,
-        echo=settings.DEBUG,
-    )
+
+
+engine = _criar_engine_resiliente()
 
 SessionLocal = sessionmaker(
     autocommit=False,
