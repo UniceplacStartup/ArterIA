@@ -1,109 +1,65 @@
 """
 Schemas de Autenticação, CRUD Completo de Profissionais de Saúde (RF01) e Configuração da IA Gemini.
-Inclui validação flexível e sanitização automática de CRM, UF, e-mail e senha.
+Validação de CRM desativada para permitir testes livres sem limitação.
 """
 
 import re
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-UFS_BRASIL = {
-    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO",
-    "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI",
-    "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
-}
-
 
 class RegistroProfissionalRequest(BaseModel):
-    """Payload para cadastro de um novo médico/profissional de saúde."""
+    """Payload para cadastro de um novo médico/profissional de saúde (CRM livre/opcional para testes)."""
 
-    nomeCompleto: str = Field(..., min_length=3, max_length=150)
+    nomeCompleto: str = Field(..., min_length=2, max_length=150)
     email: EmailStr
-    senha: str = Field(..., min_length=6, max_length=72)
-    crm: str = Field(..., min_length=3, max_length=15)
-    ufCrm: str = Field(..., min_length=2, max_length=2)
+    senha: str = Field(..., min_length=4, max_length=72)
+    crm: Optional[str] = Field(default=" LIVRE", max_length=50)
+    ufCrm: Optional[str] = Field(default="DF", max_length=10)
 
     @field_validator("nomeCompleto")
     @classmethod
     def sanitizar_nome(cls, valor: str) -> str:
         limpo = re.sub(r"[<>\"';]", "", valor).strip()
-        if len(limpo) < 3:
-            raise ValueError("Informe o nome completo válido (mínimo 3 caracteres).")
-        return limpo
+        return limpo if limpo else "Profissional ArterIA"
 
     @field_validator("crm")
     @classmethod
-    def sanitizar_crm(cls, valor: str) -> str:
-        apenas_digitos = re.sub(r"\D", "", valor.strip())
-        limpo = apenas_digitos if len(apenas_digitos) >= 3 else re.sub(r"[^A-Za-z0-9]", "", valor.strip())
-        if len(limpo) < 3:
-            raise ValueError("Informe um número de CRM válido (mínimo 3 dígitos).")
-        return limpo[:12]
+    def sanitizar_crm(cls, valor: Optional[str]) -> str:
+        if not valor or not valor.strip():
+            return "ISENTO"
+        return valor.strip()[:20]
 
     @field_validator("ufCrm")
     @classmethod
-    def validar_uf(cls, valor: str) -> str:
-        uf = valor.strip().upper()
-        if uf not in UFS_BRASIL:
-            raise ValueError("Selecione uma UF válida para o CRM.")
-        return uf
-
-    @field_validator("senha")
-    @classmethod
-    def validar_forca_senha(cls, valor: str) -> str:
-        if len(valor.strip()) < 6:
-            raise ValueError("A senha deve ter pelo menos 6 caracteres.")
-        return valor
+    def validar_uf(cls, valor: Optional[str]) -> str:
+        if not valor or not valor.strip():
+            return "DF"
+        return valor.strip().upper()[:2]
 
 
 class AtualizarProfissionalRequest(BaseModel):
-    """Payload para atualização dos dados cadastrais e/ou senha de um médico."""
+    """Payload para atualização dos dados cadastrais e/ou senha de um médico (CRM livre)."""
 
-    nomeCompleto: Optional[str] = Field(default=None, min_length=3, max_length=150)
+    nomeCompleto: Optional[str] = Field(default=None, max_length=150)
     email: Optional[EmailStr] = None
-    crm: Optional[str] = Field(default=None, min_length=3, max_length=15)
-    ufCrm: Optional[str] = Field(default=None, min_length=2, max_length=2)
-    novaSenha: Optional[str] = Field(default=None, min_length=6, max_length=72)
-
-    @field_validator("nomeCompleto")
-    @classmethod
-    def sanitizar_nome(cls, valor: Optional[str]) -> Optional[str]:
-        if valor is None:
-            return None
-        limpo = re.sub(r"[<>\"';]", "", valor).strip()
-        if len(limpo) < 3:
-            raise ValueError("Informe o nome completo válido.")
-        return limpo
+    crm: Optional[str] = Field(default=None, max_length=50)
+    ufCrm: Optional[str] = Field(default=None, max_length=10)
+    novaSenha: Optional[str] = Field(default=None, max_length=72)
 
     @field_validator("crm")
     @classmethod
     def sanitizar_crm(cls, valor: Optional[str]) -> Optional[str]:
         if valor is None:
             return None
-        apenas_digitos = re.sub(r"\D", "", valor.strip())
-        limpo = apenas_digitos if len(apenas_digitos) >= 3 else re.sub(r"[^A-Za-z0-9]", "", valor.strip())
-        if len(limpo) < 3:
-            raise ValueError("Informe um CRM válido.")
-        return limpo[:12]
+        return valor.strip()[:20] if valor.strip() else "ISENTO"
 
     @field_validator("ufCrm")
     @classmethod
     def validar_uf(cls, valor: Optional[str]) -> Optional[str]:
         if valor is None:
             return None
-        uf = valor.strip().upper()
-        if uf not in UFS_BRASIL:
-            raise ValueError("UF do CRM inválida.")
-        return uf
-
-    @field_validator("novaSenha")
-    @classmethod
-    def validar_forca_senha(cls, valor: Optional[str]) -> Optional[str]:
-        if valor is None or not valor.strip():
-            return None
-        if len(valor.strip()) < 6:
-            raise ValueError("A nova senha deve ter pelo menos 6 caracteres.")
-        return valor
+        return valor.strip().upper()[:2] if valor.strip() else "DF"
 
 
 class LoginRequest(BaseModel):

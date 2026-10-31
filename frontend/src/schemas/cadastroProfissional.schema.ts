@@ -4,7 +4,7 @@ export const cadastroProfissionalSchema = z.object({
   nomeCompleto: z
     .string()
     .min(1, 'Nome completo é obrigatório')
-    .min(3, 'Informe o nome completo (mínimo 3 caracteres)'),
+    .min(2, 'Informe o nome completo'),
   email: z
     .string()
     .min(1, 'E-mail é obrigatório')
@@ -12,14 +12,9 @@ export const cadastroProfissionalSchema = z.object({
   senha: z
     .string()
     .min(1, 'Senha é obrigatória')
-    .min(6, 'A senha deve ter pelo menos 6 caracteres'),
-  crm: z
-    .string()
-    .min(1, 'CRM é obrigatório')
-    .min(3, 'O CRM deve conter pelo menos 3 dígitos'),
-  ufCrm: z
-    .string()
-    .min(1, 'Selecione a UF do CRM'),
+    .min(4, 'A senha deve ter pelo menos 4 caracteres'),
+  crm: z.string().optional(),
+  ufCrm: z.string().optional(),
 });
 
 export type CadastroProfissionalFormData = z.infer<

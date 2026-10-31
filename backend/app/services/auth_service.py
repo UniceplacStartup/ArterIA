@@ -86,19 +86,20 @@ class AuthService:
                 detail="Já existe um profissional cadastrado com este endereço de e-mail.",
             )
 
-        if self.usuario_repo.buscar_por_crm(dados.crm, dados.ufCrm):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"O CRM {dados.crm}/{dados.ufCrm.upper()} já possui cadastro ativo.",
-            )
+        crm_informado = (dados.crm or "ISENTO").strip()[:20]
+        uf_informada = (dados.ufCrm or "DF").strip().upper()[:2]
+
+        # Se o banco antigo ainda tiver restrição de unicidade em (crm, uf_crm), evita colisão automaticamente
+        if self.usuario_repo.buscar_por_crm(crm_informado, uf_informada):
+            crm_informado = f"{crm_informado[:12]}-{uuid.uuid4().hex[:4]}"
 
         senha_hash = gerar_hash_senha(dados.senha)
         novo_usuario = self.usuario_repo.criar(
             nome=dados.nomeCompleto,
             email=dados.email,
             senha_hash=senha_hash,
-            crm=dados.crm,
-            uf_crm=dados.ufCrm,
+            crm=crm_informado,
+            uf_crm=uf_informada,
         )
 
         self.auditoria_repo.registrar_evento(
@@ -142,15 +143,8 @@ class AuthService:
 
         novo_crm = dados.crm.strip() if dados.crm else usuario.crm
         nova_uf = dados.ufCrm.strip().upper() if dados.ufCrm else usuario.uf_crm
-        if novo_crm != usuario.crm or nova_uf != usuario.uf_crm:
-            existente_crm = self.usuario_repo.buscar_por_crm(novo_crm, nova_uf)
-            if existente_crm and existente_crm.id != usuario.id:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=f"O CRM {novo_crm}/{nova_uf} já pertence a outro profissional.",
-                )
-            usuario.crm = novo_crm
-            usuario.uf_crm = nova_uf
+        usuario.crm = novo_crm[:20]
+        usuario.uf_crm = nova_uf[:2]
 
         if dados.nomeCompleto:
             usuario.nome = dados.nomeCompleto.strip()

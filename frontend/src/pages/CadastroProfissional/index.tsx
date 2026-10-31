@@ -153,14 +153,14 @@ export default function CadastroProfissional() {
                 rowGap: 2.5,
               }}
             >
-              <FieldWrapper label="Número do CRM">
+              <FieldWrapper label="CRM (Opcional para teste)">
                 <Controller
                   name="crm"
                   control={control}
                   render={({ field }) => (
                     <TextField
                       {...field}
-                      placeholder="Ex.: 123456"
+                      placeholder="Qualquer valor ou em branco"
                       fullWidth
                       error={!!errors.crm}
                       helperText={errors.crm?.message}
@@ -169,7 +169,7 @@ export default function CadastroProfissional() {
                 />
               </FieldWrapper>
 
-              <FieldWrapper label="UF do CRM">
+              <FieldWrapper label="UF (Opcional)">
                 <Controller
                   name="ufCrm"
                   control={control}

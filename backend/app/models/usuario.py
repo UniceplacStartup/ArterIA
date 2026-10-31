@@ -26,9 +26,6 @@ class Usuario(Base):
     """
 
     __tablename__ = "usuarios"
-    __table_args__ = (
-        UniqueConstraint("crm", "uf_crm", name="uq_usuarios_crm_uf"),
-    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),

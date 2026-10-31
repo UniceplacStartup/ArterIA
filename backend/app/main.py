@@ -44,6 +44,9 @@ async def lifespan(_app: FastAPI):
                     conn.execute(
                         text("ALTER TYPE nivel_calcificacao_enum ADD VALUE IF NOT EXISTS 'AUSENTE'")
                     )
+                    conn.execute(
+                        text("ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS uq_usuarios_crm_uf")
+                    )
             except Exception:
                 pass
         popular_dados_iniciais()
