@@ -175,14 +175,9 @@ class ExameService:
                 f"• Conduta / Nota Oficial CSBI: {nota_csbi or 'Sem indicação de nota cardiovascular obrigatória pela CSBI.'}"
             )
 
-            explicacao_paciente = gemini_service.responder_chat_assistente_csbi(
-                mensagem_paciente="Explique o resultado da minha mamografia de forma acolhedora.",
+            explicacao_paciente = gemini_service.gerar_explicacao_inicial_paciente_csbi(
                 grau_bac=grau_bac,
                 idade_paciente=idade_paciente,
-                localizacao=exame.resultado_ia.localizacao,
-                padrao=exame.resultado_ia.padrao,
-                triagem_resumo="",
-                historico_mensagens=[],
             )
 
             resultado_dto = ResultadoIAResponse(

@@ -694,6 +694,61 @@ class GeminiAnalysisService:
         indice = (int(sha256_hex[:8], 16) + semente_extra) % len(perfis_padrao)
         return perfis_padrao[indice]
 
+    @staticmethod
+    def gerar_explicacao_inicial_paciente_csbi(
+        grau_bac: int,
+        idade_paciente: Optional[int],
+    ) -> str:
+        """
+        Gera a mensagem inicial acolhedora para a paciente (sem asteriscos ou hashtags)
+        seguindo as diretrizes da CSBI e BI-RADS, sem bloquear requisições GET.
+        """
+        paragrafos: List[str] = [
+            "Olá! Sou sua assistente virtual de saúde da mama. Quero começar tranquilizando você sobre o significado "
+            "das calcificações arteriais mamárias (BAC). Esse tipo de calcificação ocorre nas paredes dos pequenos "
+            "vasos sanguíneos da mama e é considerado benigno para a mama (classificado como BI-RADS 2 do ponto de vista "
+            "oncológico). Isso significa que calcificação nas artérias da mama não é câncer de mama, não aumenta o risco "
+            "de câncer e não se transforma em tumor."
+        ]
+
+        if grau_bac == 0:
+            paragrafos.append(
+                "No seu exame, a classificação pela diretriz da Sociedade Canadense de Imagem da Mama (CSBI) foi "
+                "Grau 0, indicando ausência de calcificações nos vasos sanguíneos das mamas."
+            )
+        elif grau_bac == 1:
+            paragrafos.append(
+                "No seu exame, foi observado o Grau 1 da escala CSBI, que representa apenas poucas calcificações "
+                "vasculares puntiformes isoladas."
+            )
+        elif grau_bac == 2:
+            paragrafos.append(
+                "No seu exame, foi observado o Grau 2 da escala CSBI, caracterizado por calcificações vasculares "
+                "mais marcadas ou em formato de linhas paralelas em menos de 3 vasos da mama."
+            )
+        else:
+            paragrafos.append(
+                "No seu exame, foi observado o Grau 3 da escala CSBI, que corresponde a calcificações vasculares "
+                "acentuadas presentes em 3 ou mais vasos da mama."
+            )
+
+        precisa_atencao_cardio = grau_bac == 3 or (
+            grau_bac in (1, 2) and idade_paciente is not None and idade_paciente < 55
+        )
+        if precisa_atencao_cardio:
+            paragrafos.append(
+                "Estudos científicos internacionais mostram uma relação importante entre essas calcificações nos vasos "
+                "da mama e a saúde cardiovascular, especialmente no Grau 3 ou quando aparecem antes dos 55 anos. "
+                "Por isso, recomendo com carinho que você mostre este resultado ao seu médico de confiança ou "
+                "cardiologista para avaliar fatores preventivos como pressão arterial, colesterol e a saúde do coração."
+            )
+
+        paragrafos.append(
+            "Convidamos você a preencher a triagem na aba ao lado, configurar um lembrete na sua agenda para o "
+            "acompanhamento médico e enviar qualquer dúvida aqui no chat."
+        )
+        return limpar_formatacao_assistente("\n\n".join(paragrafos))
+
     def responder_chat_assistente_csbi(
         self,
         mensagem_paciente: str,
