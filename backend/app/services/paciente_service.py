@@ -1,9 +1,8 @@
 """
-Serviço de Gestão Completa (CRUD) de Pacientes (RF07) com Conformidade LGPD.
+Serviço de Gestão Completa (CRUD) de Pacientes (RF07) com Conformidade LGPD e Isolamento por Médico.
 
-Realiza descriptografia em memória apenas para médicos autenticados,
-aplica mascaramento de CPF/E-mail, exclui arquivos físicos do cofre quando um paciente
-é removido e registra toda operação na trilha de auditoria.
+Cada médico acessa, cadastra, edita e exclui exclusivamente seus próprios pacientes (`criado_por_id`).
+Os médicos não compartilham pacientes entre si.
 """
 
 import secrets
@@ -24,7 +23,7 @@ from app.services.dicom_service import dicom_storage_service
 
 
 class PacienteService:
-    """Regras de negócio de cadastro, listagem, consulta, edição e exclusão segura de pacientes."""
+    """Regras de negócio de cadastro, listagem, consulta, edição e exclusão segura de pacientes por médico."""
 
     def __init__(self, db: Session) -> None:
         self.paciente_repo = PacienteRepository(db)
@@ -33,7 +32,7 @@ class PacienteService:
     @staticmethod
     def converter_para_dto(paciente: Paciente) -> PacienteResponse:
         """
-        Descriptografa os dados do paciente para o médico autenticado e inclui
+        Descriptografa os dados do paciente para o médico responsável e inclui
         também as versões mascaradas de CPF e E-mail.
         Calcula a data e o status do último exame vinculado.
         """
@@ -71,27 +70,37 @@ class PacienteService:
             statusUltimoExame=ultimo_exame_status,
         )
 
-    def listar_pacientes(self) -> List[PacienteResponse]:
-        """Lista todos os pacientes cadastrados formatados para a tabela do Dashboard."""
-        pacientes = self.paciente_repo.listar_todos()
+    def listar_pacientes(
+        self, usuario_id: Optional[uuid.UUID] = None
+    ) -> List[PacienteResponse]:
+        """Lista exclusivamente os pacientes cadastrados pelo médico autenticado (`usuario_id`)."""
+        pacientes = self.paciente_repo.listar_todos(criado_por_id=usuario_id)
         return [self.converter_para_dto(p) for p in pacientes]
 
-    def localizar_entidade_paciente(self, identificador: str) -> Paciente:
+    def localizar_entidade_paciente(
+        self,
+        identificador: str,
+        usuario_id: Optional[uuid.UUID] = None,
+    ) -> Paciente:
         """
-        Permite localizar o paciente tanto pelo UUID quanto pelo `codigo_publico` (ex.: `101`).
-        Levanta HTTP 404 caso não exista.
+        Localiza o paciente pelo UUID ou `codigo_publico` garantindo que pertença ao médico `usuario_id`.
+        Levanta HTTP 404 caso não exista ou pertença a outro médico.
         """
         paciente: Optional[Paciente] = None
         try:
             uid = uuid.UUID(identificador)
-            paciente = self.paciente_repo.buscar_por_id(uid)
+            paciente = self.paciente_repo.buscar_por_id(
+                uid, criado_por_id=usuario_id
+            )
         except ValueError:
-            paciente = self.paciente_repo.buscar_por_codigo_publico(identificador)
+            paciente = self.paciente_repo.buscar_por_codigo_publico(
+                identificador, criado_por_id=usuario_id
+            )
 
         if not paciente:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Paciente não encontrado no sistema.",
+                detail="Paciente não encontrado na sua carteira médica.",
             )
         return paciente
 
@@ -101,9 +110,11 @@ class PacienteService:
         usuario_id: Optional[uuid.UUID] = None,
         ip_origem: Optional[str] = None,
     ) -> PacienteResponse:
-        """Busca dados de um paciente específico com resposta imediata."""
-        _ = (usuario_id, ip_origem)
-        paciente = self.localizar_entidade_paciente(identificador)
+        """Busca dados de um paciente específico pertencente ao médico autenticado."""
+        _ = ip_origem
+        paciente = self.localizar_entidade_paciente(
+            identificador, usuario_id=usuario_id
+        )
         return self.converter_para_dto(paciente)
 
     def criar_paciente(
@@ -114,8 +125,7 @@ class PacienteService:
         user_agent: Optional[str] = None,
     ) -> PacienteResponse:
         """
-        Valida e cadastra um novo paciente com dados criptografados (Fernet AES)
-        e gera Blind Index (HMAC-SHA256) sem bloquear testes por repetição de CPF.
+        Valida e cadastra um novo paciente vinculado exclusivamente ao médico autenticado (`usuario_id`).
         """
         _ = (ip_origem, user_agent)
         try:
@@ -149,10 +159,12 @@ class PacienteService:
         ip_origem: Optional[str] = None,
     ) -> PacienteResponse:
         """
-        Atualiza os dados cadastrais de um paciente existente re-criptografando os atributos modificados.
+        Atualiza os dados cadastrais de um paciente pertencente ao médico autenticado.
         """
-        _ = (usuario_id, ip_origem)
-        paciente = self.localizar_entidade_paciente(identificador)
+        _ = ip_origem
+        paciente = self.localizar_entidade_paciente(
+            identificador, usuario_id=usuario_id
+        )
         nome_novo = dados.nomeCompleto or dados.nome
 
         atualizado = self.paciente_repo.atualizar(
@@ -172,14 +184,15 @@ class PacienteService:
         ip_origem: Optional[str] = None,
     ) -> None:
         """
-        Exclui um paciente, todos os seus exames no banco de dados e apaga com segurança
-        os arquivos físicos (.dcm, .pdf, .png, .jpg) do cofre de armazenamento (Direito ao Esquecimento LGPD).
+        Exclui um paciente do médico autenticado, todos os seus exames no banco de dados e apaga
+        os arquivos físicos (.dcm, .pdf, .png, .jpg) do cofre de armazenamento.
         """
-        paciente = self.localizar_entidade_paciente(identificador)
+        paciente = self.localizar_entidade_paciente(
+            identificador, usuario_id=usuario_id
+        )
         paciente_id_str = str(paciente.id)
         codigo_publico = paciente.codigo_publico
 
-        # Remove os arquivos físicos de todos os exames do paciente no cofre seguro
         for exame in paciente.exames:
             if exame.arquivo_dicom_nome_seguro:
                 dicom_storage_service.remover_arquivo_seguro(

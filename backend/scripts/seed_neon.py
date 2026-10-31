@@ -48,7 +48,7 @@ def popular_dados_iniciais() -> None:
             medico.bloqueado_ate = None
             usuario_repo.atualizar(medico)
 
-        pacientes_existentes = paciente_repo.listar_todos()
+        pacientes_existentes = paciente_repo.listar_todos(criado_por_id=medico.id)
         if not pacientes_existentes:
             # 1. Adriana Silva (LAUDADO)
             p1 = paciente_repo.criar(

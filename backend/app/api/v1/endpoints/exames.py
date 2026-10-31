@@ -90,11 +90,11 @@ def buscar_exame(
 def obter_arquivo_exame(
     exame_id: str,
     db: Session = Depends(get_db),
-    _usuario: Usuario = Depends(obter_usuario_atual),
+    usuario: Usuario = Depends(obter_usuario_atual),
 ) -> FileResponse:
     """
     Serve o arquivo DICOM (.dcm) ou PDF (.pdf) diretamente do cofre isolado
-    apenas para médicos autenticados, impedindo exposição pública de exames médicos.
+    apenas para o médico responsável pelo paciente, impedindo exposição entre médicos.
     """
     try:
         uid = uuid.UUID(exame_id)
@@ -106,7 +106,15 @@ def obter_arquivo_exame(
 
     repo = ExameRepository(db)
     exame = repo.buscar_por_id(uid)
-    if not exame or not exame.arquivo_dicom_nome_seguro:
+    if (
+        not exame
+        or not exame.arquivo_dicom_nome_seguro
+        or (
+            exame.paciente
+            and exame.paciente.criado_por_id is not None
+            and exame.paciente.criado_por_id != usuario.id
+        )
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Arquivo de exame não encontrado.",
@@ -190,7 +198,7 @@ def interagir_assistente_csbi(
     exame_id: str,
     dados: AssistenteCsbiRequest,
     db: Session = Depends(get_db),
-    _usuario: Usuario = Depends(obter_usuario_atual),
+    usuario: Usuario = Depends(obter_usuario_atual),
 ) -> AssistenteCsbiResponse:
     """
     Executa a Assistente Virtual Especialista em Saúde da Mama (Diretrizes CSBI & BI-RADS),
@@ -198,7 +206,9 @@ def interagir_assistente_csbi(
     e retornando texto acolhedor sem asteriscos ou hashtags.
     """
     service = ExameService(db)
-    return service.interagir_assistente_csbi(exame_id=exame_id, dados=dados)
+    return service.interagir_assistente_csbi(
+        exame_id=exame_id, dados=dados, usuario_id=usuario.id
+    )
 
 
 @router.delete(

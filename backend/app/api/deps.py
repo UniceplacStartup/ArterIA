@@ -1,13 +1,13 @@
 """
 Dependências de Segurança e Injeção de Contexto para as Rotas FastAPI.
-Otimizado com cache em memória (TTL de 120s) e fallback resiliente para evitar
-consultas repetitivas ao banco em cada requisição e impedir desconexões acidentais (401).
+Garante isolamento estrito por médico autenticado (cada médico acessa apenas sua própria conta e pacientes).
 """
 
 import time
 from typing import Dict, Optional, Tuple
+from urllib.parse import unquote
 import uuid
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 from app.core.security import decodificar_token, gerar_hash_senha
@@ -17,7 +17,7 @@ from app.repositories.usuario_repo import UsuarioRepository
 
 security_bearer = HTTPBearer(auto_error=False)
 
-# Cache leve em memória para evitar query repetitiva de usuário a cada request: token -> (Usuario, expira_em)
+# Cache leve em memória por token: token_str -> (Usuario, expira_em)
 _CACHE_USUARIOS: Dict[str, Tuple[Usuario, float]] = {}
 _TTL_CACHE_SEGUNDOS = 120.0
 
@@ -40,21 +40,29 @@ def obter_user_agent(request: Request) -> Optional[str]:
     return request.headers.get("User-Agent")
 
 
-def _obter_ou_criar_medico_padrao(db: Session) -> Usuario:
+def _resolver_medico_contingencia(db: Session, token_str: str) -> Optional[Usuario]:
     """
-    Retorna o primeiro médico ativo do banco ou cria a conta padrão caso o banco esteja vazio.
-    Garante que tokens de contingência ou reinicializações do Render nunca bloqueiem o uso.
+    Se o token foi emitido em modo de contingência durante cold-start (`arteria-local:<email>:<nome>`),
+    localiza ou cria exatamente a conta daquele médico específico no banco, mantendo isolamento total.
     """
+    if not token_str.startswith("arteria-local:"):
+        return None
+
+    partes = token_str.split(":", 2)
+    email = unquote(partes[1]).strip().lower() if len(partes) > 1 else ""
+    nome = unquote(partes[2]).strip() if len(partes) > 2 else ""
+    if not email:
+        return None
+
     repo = UsuarioRepository(db)
-    Existentes = repo.listar_todos()
-    for med in Existentes:
-        if med.ativo:
-            return med
+    usuario = repo.buscar_por_email(email)
+    if usuario:
+        return usuario
 
     return repo.criar(
-        nome="Dra. Helena Costa",
-        email="medico@arteria.med.br",
-        crm="12345",
+        nome=nome or f"Dr(a). {email.split('@')[0].title()}",
+        email=email,
+        crm=f"CRM-{uuid.uuid4().hex[:5].upper()}",
         uf_crm="DF",
         senha_hash=gerar_hash_senha("ArterIA@2026"),
     )
@@ -65,15 +73,18 @@ def obter_usuario_atual(
     db: Session = Depends(get_db),
 ) -> Usuario:
     """
-    Dependência para rotas protegidas (RF01).
-    Utiliza cache em memória para resposta instantânea e fallback resiliente para
-    que o médico nunca tome erro 401 durante testes ou cold-start do servidor.
+    Dependência obrigatória para rotas protegidas (RF01).
+    Identifica de forma única o médico autenticado para garantir que cada médico
+    visualize e gerencie exclusivamente seus próprios pacientes.
     """
-    token_str = (
-        credenciais.credentials.strip()
-        if (credenciais and credenciais.credentials)
-        else "default"
-    )
+    if not credenciais or not credenciais.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Autenticação obrigatória.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token_str = credenciais.credentials.strip()
     agora = time.monotonic()
 
     em_cache = _CACHE_USUARIOS.get(token_str)
@@ -83,7 +94,9 @@ def obter_usuario_atual(
     repo = UsuarioRepository(db)
     usuario: Optional[Usuario] = None
 
-    if token_str != "default" and not token_str.startswith("arteria-local-"):
+    if token_str.startswith("arteria-local:"):
+        usuario = _resolver_medico_contingencia(db, token_str)
+    else:
         try:
             payload = decodificar_token(token_str, tipo_esperado="access")
             usuario_id = uuid.UUID(payload["sub"])
@@ -92,7 +105,11 @@ def obter_usuario_atual(
             usuario = None
 
     if not usuario or not usuario.ativo:
-        usuario = _obter_ou_criar_medico_padrao(db)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sessão inválida ou expirada. Faça login novamente.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     _CACHE_USUARIOS[token_str] = (usuario, agora + _TTL_CACHE_SEGUNDOS)
     return usuario

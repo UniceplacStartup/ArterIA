@@ -13,6 +13,7 @@ import {
   deletarExame,
 } from '@/services/exames';
 import { examesMock } from '@/mocks/exames.mock';
+import { useChaveMedicoQuery } from '@/hooks/usePacientes';
 import type { AssinarLaudoPayload, Exame, Paciente } from '@/types';
 
 export function useExame(exameId: string) {
@@ -38,6 +39,7 @@ export function useExamesPorPaciente(pacienteId?: string) {
 
 export function useUploadExame() {
   const queryClient = useQueryClient();
+  const chaveMedico = useChaveMedicoQuery();
   return useMutation({
     mutationFn: ({
       pacienteId,
@@ -60,21 +62,24 @@ export function useUploadExame() {
           return [novoExame, ...semDuplicata];
         },
       );
-      queryClient.setQueryData<Paciente[]>(['pacientes'], (antigos) => {
-        if (!antigos) return antigos;
-        return antigos.map((p) =>
-          p.id === novoExame.pacienteId
-            ? {
-                ...p,
-                ultimoExame: (
-                  novoExame.criadoEm || new Date().toISOString()
-                ).slice(0, 10),
-                ultimoExameId: novoExame.id,
-                statusUltimoExame: novoExame.status,
-              }
-            : p,
-        );
-      });
+      queryClient.setQueryData<Paciente[]>(
+        ['pacientes', chaveMedico],
+        (antigos) => {
+          if (!antigos) return antigos;
+          return antigos.map((p) =>
+            p.id === novoExame.pacienteId
+              ? {
+                  ...p,
+                  ultimoExame: (
+                    novoExame.criadoEm || new Date().toISOString()
+                  ).slice(0, 10),
+                  ultimoExameId: novoExame.id,
+                  statusUltimoExame: novoExame.status,
+                }
+              : p,
+          );
+        },
+      );
     },
   });
 }
@@ -99,6 +104,7 @@ export function useReprocessarExame(exameId: string) {
 
 export function useAssinarLaudo(exameId: string) {
   const queryClient = useQueryClient();
+  const chaveMedico = useChaveMedicoQuery();
   return useMutation({
     mutationFn: (payload: AssinarLaudoPayload | string) =>
       assinarLaudo(exameId, payload),
@@ -112,20 +118,24 @@ export function useAssinarLaudo(exameId: string) {
             ? antigos.map((e) => (e.id === data.id ? data : e))
             : [data],
       );
-      queryClient.setQueryData<Paciente[]>(['pacientes'], (antigos) => {
-        if (!antigos) return antigos;
-        return antigos.map((p) =>
-          p.id === data.pacienteId
-            ? { ...p, statusUltimoExame: 'LAUDADO' }
-            : p,
-        );
-      });
+      queryClient.setQueryData<Paciente[]>(
+        ['pacientes', chaveMedico],
+        (antigos) => {
+          if (!antigos) return antigos;
+          return antigos.map((p) =>
+            p.id === data.pacienteId
+              ? { ...p, statusUltimoExame: 'LAUDADO' }
+              : p,
+          );
+        },
+      );
     },
   });
 }
 
 export function useDeletarExame() {
   const queryClient = useQueryClient();
+  const chaveMedico = useChaveMedicoQuery();
   return useMutation({
     mutationFn: ({ exameId }: { exameId: string; pacienteId?: string }) =>
       deletarExame(exameId),
@@ -143,7 +153,7 @@ export function useDeletarExame() {
           queryKey: ['exame', variaveis.pacienteId],
         });
       }
-      queryClient.invalidateQueries({ queryKey: ['pacientes'] });
+      queryClient.invalidateQueries({ queryKey: ['pacientes', chaveMedico] });
     },
   });
 }

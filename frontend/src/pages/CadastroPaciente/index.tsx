@@ -25,13 +25,14 @@ import {
 } from '@/components/AuthCard/AuthCard.styles';
 import { DicomUpload } from '@/components/Upload/DicomUpload';
 import { FieldWrapper } from '@/components/FieldWrapper/FieldWrapper';
-import { useCriarPaciente } from '@/hooks/usePacientes';
+import { useChaveMedicoQuery, useCriarPaciente } from '@/hooks/usePacientes';
 import { useUploadExame } from '@/hooks/useExame';
 import type { Exame, Paciente } from '@/types';
 
 export default function CadastroPaciente() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const chaveMedico = useChaveMedicoQuery();
   const { mutateAsync: cadastrarPaciente } = useCriarPaciente();
   const { mutateAsync: enviarExameDicom } = useUploadExame();
 
@@ -60,12 +61,15 @@ export default function CadastroPaciente() {
         email: data.email?.trim() || undefined,
       });
 
-      // Atualiza imediatamente a lista em cache no React Query
-      queryClient.setQueryData<Paciente[]>(['pacientes'], (antigos) => {
-        const lista = antigos ? [...antigos] : [];
-        const semDuplicata = lista.filter((p) => p.id !== novoPaciente.id);
-        return [novoPaciente, ...semDuplicata];
-      });
+      // Atualiza imediatamente a lista em cache do médico logado no React Query
+      queryClient.setQueryData<Paciente[]>(
+        ['pacientes', chaveMedico],
+        (antigos) => {
+          const lista = antigos ? [...antigos] : [];
+          const semDuplicata = lista.filter((p) => p.id !== novoPaciente.id);
+          return [novoPaciente, ...semDuplicata];
+        },
+      );
 
       // 2. Se o usuário anexou um exame, faz o upload e navega direto para a análise
       if (data.exame instanceof File) {

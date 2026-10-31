@@ -6,7 +6,10 @@
 import { api } from './api';
 import { USE_MOCKS } from '@/config';
 import { examesMock } from '@/mocks/exames.mock';
-import { pacientesMock } from '@/mocks/pacientes.mock';
+import {
+  lerPacientesLocaisDoMedico,
+  salvarPacientesLocaisDoMedico,
+} from '@/services/pacientes';
 import type {
   AssinarLaudoPayload,
   AssistenteCsbiRequest,
@@ -24,14 +27,16 @@ function detectarFormatoPorNome(nomeArquivo: string): string {
 
 function sincronizarExameNoCacheLocal(exame: Exame): Exame {
   examesMock[exame.id] = exame;
-  const pacIdx = pacientesMock.findIndex((p) => p.id === exame.pacienteId);
+  const listaMed = lerPacientesLocaisDoMedico();
+  const pacIdx = listaMed.findIndex((p) => p.id === exame.pacienteId);
   if (pacIdx >= 0) {
-    pacientesMock[pacIdx] = {
-      ...pacientesMock[pacIdx],
+    listaMed[pacIdx] = {
+      ...listaMed[pacIdx],
       ultimoExame: (exame.criadoEm || new Date().toISOString()).slice(0, 10),
       ultimoExameId: exame.id,
       statusUltimoExame: exame.status,
     };
+    salvarPacientesLocaisDoMedico(listaMed);
   }
   return exame;
 }

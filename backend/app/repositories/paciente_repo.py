@@ -1,6 +1,6 @@
 """
-Repositório de Pacientes (RF07) com Criptografia Transparente (LGPD).
-Otimizado para baixa latência: reduz round-trips ao Neon Postgres e evita conflito 409 em testes.
+Repositório de Pacientes (RF07) com Criptografia Transparente (LGPD) e Isolamento por Médico.
+Cada médico visualiza, consulta, edita e exclui exclusivamente os pacientes cadastrados por ele (`criado_por_id`).
 """
 
 from datetime import date
@@ -14,42 +14,57 @@ from app.models.paciente import Paciente
 
 
 class PacienteRepository:
-    """Operações de acesso a dados (CRUD) de `Paciente` com criptografia em nível de aplicação."""
+    """Operações de acesso a dados (CRUD) de `Paciente` com isolamento estrito por médico."""
 
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def listar_todos(self) -> List[Paciente]:
-        """Retorna todos os pacientes com seus exames pré-carregados (evita problema N+1)."""
-        stmt = (
-            select(Paciente)
-            .options(selectinload(Paciente.exames))
-            .order_by(Paciente.criado_em.desc())
-        )
+    def listar_todos(
+        self, criado_por_id: Optional[uuid.UUID] = None
+    ) -> List[Paciente]:
+        """
+        Retorna os pacientes com seus exames pré-carregados.
+        Quando `criado_por_id` é informado, filtra estritamente pelos pacientes daquele médico.
+        """
+        stmt = select(Paciente).options(selectinload(Paciente.exames))
+        if criado_por_id is not None:
+            stmt = stmt.where(Paciente.criado_por_id == criado_por_id)
+        stmt = stmt.order_by(Paciente.criado_em.desc())
         return list(self.db.scalars(stmt).all())
 
-    def buscar_por_id(self, paciente_id: uuid.UUID) -> Optional[Paciente]:
-        """Busca paciente pelo UUID primário com exames carregados."""
+    def buscar_por_id(
+        self,
+        paciente_id: uuid.UUID,
+        criado_por_id: Optional[uuid.UUID] = None,
+    ) -> Optional[Paciente]:
+        """Busca paciente pelo UUID primário garantindo que pertença ao médico autenticado."""
         stmt = (
             select(Paciente)
             .options(selectinload(Paciente.exames))
             .where(Paciente.id == paciente_id)
         )
+        if criado_por_id is not None:
+            stmt = stmt.where(Paciente.criado_por_id == criado_por_id)
         return self.db.scalar(stmt)
 
-    def buscar_por_codigo_publico(self, codigo: str) -> Optional[Paciente]:
-        """Permite localizar paciente pelo código curto (ex.: `101` ou `PAC-101`)."""
+    def buscar_por_codigo_publico(
+        self,
+        codigo: str,
+        criado_por_id: Optional[uuid.UUID] = None,
+    ) -> Optional[Paciente]:
+        """Permite localizar paciente pelo código curto garantindo que pertença ao médico autenticado."""
         stmt = (
             select(Paciente)
             .options(selectinload(Paciente.exames))
             .where(Paciente.codigo_publico == codigo.strip())
         )
+        if criado_por_id is not None:
+            stmt = stmt.where(Paciente.criado_por_id == criado_por_id)
         return self.db.scalar(stmt)
 
     def buscar_por_cpf_blind_index(self, cpf: str) -> Optional[Paciente]:
         """
-        Realiza busca exata de paciente por CPF utilizando o Blind Index (HMAC-SHA256),
-        sem jamais expor o CPF em texto plano na query SQL.
+        Realiza busca exata de paciente por CPF utilizando o Blind Index (HMAC-SHA256).
         """
         blind_idx = crypto_service.gerar_blind_index(cpf)
         stmt = select(Paciente).where(Paciente.cpf_blind_index == blind_idx)
@@ -72,13 +87,16 @@ class PacienteRepository:
         criado_por_id: Optional[uuid.UUID] = None,
     ) -> Paciente:
         """
-        Criptografa os atributos sensíveis (Nome, CPF, E-mail) com AES/Fernet
-        e gera o `cpf_blind_index` (HMAC-SHA256) antes de persistir no PostgreSQL.
-        Se o mesmo CPF for reutilizado durante testes, gera blind index único para nunca bloquear.
+        Criptografa os atributos sensíveis (Nome, CPF, E-mail) com AES/Fernet,
+        vincula obrigatoriamente ao médico `criado_por_id` e gera `cpf_blind_index` único.
         """
         cpf_limpo = crypto_service.normalizar_cpf(cpf)
-        blind_index = crypto_service.gerar_blind_index(cpf_limpo)
-        if self.db.scalar(select(Paciente.id).where(Paciente.cpf_blind_index == blind_index)):
+        blind_index = crypto_service.gerar_blind_index(
+            f"{cpf_limpo}:{criado_por_id or ''}"
+        )
+        if self.db.scalar(
+            select(Paciente.id).where(Paciente.cpf_blind_index == blind_index)
+        ):
             blind_index = crypto_service.gerar_blind_index(
                 f"{cpf_limpo}-{secrets.token_hex(4)}"
             )
@@ -112,7 +130,9 @@ class PacienteRepository:
             paciente.nome_encrypted = crypto_service.criptografar(nome) or ""
         if cpf is not None:
             cpf_limpo = crypto_service.normalizar_cpf(cpf)
-            novo_blind = crypto_service.gerar_blind_index(cpf_limpo)
+            novo_blind = crypto_service.gerar_blind_index(
+                f"{cpf_limpo}:{paciente.criado_por_id or ''}"
+            )
             colisao = self.db.scalar(
                 select(Paciente.id).where(
                     Paciente.cpf_blind_index == novo_blind,

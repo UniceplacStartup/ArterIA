@@ -231,20 +231,37 @@ class ExameService:
             laudoPdfUrl=exame.laudo_pdf_url,
         )
 
-    def _localizar_exame_ou_ultimo_do_paciente(self, identificador: str) -> Exame:
+    def _localizar_exame_ou_ultimo_do_paciente(
+        self,
+        identificador: str,
+        usuario_id: Optional[uuid.UUID] = None,
+    ) -> Exame:
         """
-        Localiza um exame pelo seu UUID ou retorna o exame mais recente do paciente.
+        Localiza um exame pelo seu UUID ou retorna o exame mais recente do paciente,
+        garantindo que pertença exclusivamente ao médico `usuario_id`.
         """
         try:
             uid = uuid.UUID(identificador)
             exame = self.exame_repo.buscar_por_id(uid)
             if exame:
+                if (
+                    usuario_id is not None
+                    and exame.paciente
+                    and exame.paciente.criado_por_id is not None
+                    and exame.paciente.criado_por_id != usuario_id
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Exame não pertence à sua carteira de pacientes.",
+                    )
                 return exame
         except ValueError:
             pass
 
         try:
-            paciente = self.paciente_service.localizar_entidade_paciente(identificador)
+            paciente = self.paciente_service.localizar_entidade_paciente(
+                identificador, usuario_id=usuario_id
+            )
             if paciente.exames:
                 exame_recente = self.exame_repo.buscar_por_id(paciente.exames[0].id)
                 if exame_recente:
@@ -264,19 +281,31 @@ class ExameService:
         ip_origem: Optional[str] = None,
     ) -> ExameResponse:
         """
-        Retorna os detalhes de um exame com baixa latência.
+        Retorna os detalhes de um exame pertencente à carteira do médico autenticado.
         Caso `exame_id` corresponda a um paciente sem exames ativos, retorna estado `PENDENTE`.
         """
-        _ = (usuario_id, ip_origem)
+        _ = ip_origem
         try:
             uid = uuid.UUID(exame_id)
             exame_direto = self.exame_repo.buscar_por_id(uid)
             if exame_direto:
+                if (
+                    usuario_id is not None
+                    and exame_direto.paciente
+                    and exame_direto.paciente.criado_por_id is not None
+                    and exame_direto.paciente.criado_por_id != usuario_id
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Exame não encontrado na sua carteira de pacientes.",
+                    )
                 return self.converter_para_dto(exame_direto)
         except ValueError:
             pass
 
-        paciente = self.paciente_service.localizar_entidade_paciente(exame_id)
+        paciente = self.paciente_service.localizar_entidade_paciente(
+            exame_id, usuario_id=usuario_id
+        )
         if paciente.exames:
             exame_recente = self.exame_repo.buscar_por_id(paciente.exames[0].id)
             if exame_recente:
@@ -295,10 +324,14 @@ class ExameService:
             laudoPdfUrl=None,
         )
 
-    def listar_exames_por_paciente(self, paciente_identificador: str) -> List[ExameResponse]:
-        """Lista todos os exames pertencentes ao histórico de um paciente (RN06)."""
+    def listar_exames_por_paciente(
+        self,
+        paciente_identificador: str,
+        usuario_id: Optional[uuid.UUID] = None,
+    ) -> List[ExameResponse]:
+        """Lista todos os exames pertencentes ao histórico de um paciente do médico autenticado (RN06)."""
         paciente = self.paciente_service.localizar_entidade_paciente(
-            paciente_identificador
+            paciente_identificador, usuario_id=usuario_id
         )
         exames = self.exame_repo.listar_por_paciente(paciente.id)
         return [self.converter_para_dto(e) for e in exames]
@@ -318,7 +351,7 @@ class ExameService:
         """
         _ = ip_origem
         paciente = self.paciente_service.localizar_entidade_paciente(
-            paciente_identificador
+            paciente_identificador, usuario_id=usuario_id
         )
 
         nome_seguro, sha256_hex, tamanho_bytes = (
@@ -367,8 +400,10 @@ class ExameService:
         ip_origem: Optional[str] = None,
     ) -> ExameResponse:
         """Permite solicitar uma nova análise de IA para o exame com resposta imediata (RE02)."""
-        _ = (usuario_id, ip_origem)
-        exame = self._localizar_exame_ou_ultimo_do_paciente(exame_id)
+        _ = ip_origem
+        exame = self._localizar_exame_ou_ultimo_do_paciente(
+            exame_id, usuario_id=usuario_id
+        )
         caminho_seguro = (
             dicom_storage_service.obter_caminho_seguro(exame.arquivo_dicom_nome_seguro)
             if exame.arquivo_dicom_nome_seguro
@@ -405,7 +440,9 @@ class ExameService:
         Registra o diagnóstico final assinado pelo médico (RF04) e grava log de divergência (RA01)
         quando aplicável.
         """
-        exame = self._localizar_exame_ou_ultimo_do_paciente(exame_id)
+        exame = self._localizar_exame_ou_ultimo_do_paciente(
+            exame_id, usuario_id=medico_id
+        )
 
         classificacao_ia = (
             exame.resultado_ia.classificacao if exame.resultado_ia else None
@@ -456,12 +493,15 @@ class ExameService:
         self,
         exame_id: str,
         dados: AssistenteCsbiRequest,
+        usuario_id: Optional[uuid.UUID] = None,
     ) -> AssistenteCsbiResponse:
         """
         Processa a conversa da Assistente Virtual CSBI integrando os dados da triagem
         (sintomas mamários + histórico cardiovascular) e o resultado do exame, sem expor PII.
         """
-        exame = self._localizar_exame_ou_ultimo_do_paciente(exame_id)
+        exame = self._localizar_exame_ou_ultimo_do_paciente(
+            exame_id, usuario_id=usuario_id
+        )
         idade_paciente = self._calcular_idade_paciente(exame)
 
         grau_bac = 1
@@ -527,10 +567,12 @@ class ExameService:
         ip_origem: Optional[str] = None,
     ) -> None:
         """
-        Exclui um exame específico e remove fisicamente a imagem/PDF/DICOM correspondente
-        do cofre seguro, registrando a operação na auditoria LGPD.
+        Exclui um exame específico pertencente ao médico autenticado e remove fisicamente a imagem/PDF/DICOM
+        correspondente do cofre seguro, registrando a operação na auditoria LGPD.
         """
-        exame = self._localizar_exame_ou_ultimo_do_paciente(exame_id)
+        exame = self._localizar_exame_ou_ultimo_do_paciente(
+            exame_id, usuario_id=usuario_id
+        )
         exame_id_str = str(exame.id)
         paciente_id_str = str(exame.paciente_id)
 

@@ -146,6 +146,20 @@ export function PatientTable({ pacientes }: { pacientes: Paciente[] }) {
             </TableRow>
           </TableHead>
           <TableBody>
+            {pacientes.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
+                  <Typography variant="body1" fontWeight={600} gutterBottom>
+                    Sua carteira de pacientes está vazia
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Cada médico possui sua própria lista exclusiva de pacientes.
+                    Clique em &ldquo;Cadastrar paciente&rdquo; acima para
+                    adicionar seu primeiro paciente.
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
             {pacientes.map((paciente) => {
               const destinoId = paciente.ultimoExameId ?? paciente.id;
               return (

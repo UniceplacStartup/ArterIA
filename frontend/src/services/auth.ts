@@ -1,11 +1,11 @@
 /**
  * Serviço de Autenticação e CRUD Completo de Profissionais Médicos (RF01).
  * Integra com os endpoints `/api/auth/*` do Backend Python (FastAPI) e possui
- * fallback resiliente em `localStorage` caso a API no Render esteja inicializando.
+ * fallback resiliente em `localStorage` mantendo isolamento estrito por médico.
  */
 
 import { api } from './api';
-import { USE_MOCKS, delay } from '@/config';
+import { USE_MOCKS } from '@/config';
 import type { AuthResponse, Usuario } from '@/types';
 import type { CadastroProfissionalFormData } from '@/schemas/cadastroProfissional.schema';
 import type { LoginFormData } from '@/schemas/login.schema';
@@ -46,7 +46,9 @@ function salvarMedicoLocal(usuario: Usuario): void {
   try {
     const atuais = lerMedicosLocais();
     const idx = atuais.findIndex(
-      (u) => u.email.toLowerCase() === usuario.email.toLowerCase() || u.id === usuario.id,
+      (u) =>
+        u.email.toLowerCase() === usuario.email.toLowerCase() ||
+        u.id === usuario.id,
     );
     if (idx >= 0) {
       atuais[idx] = usuario;
@@ -57,6 +59,12 @@ function salvarMedicoLocal(usuario: Usuario): void {
   } catch {
     // ignora erro de escrita
   }
+}
+
+function gerarTokenContingenciaPorMedico(usuario: Usuario): string {
+  const emailCod = encodeURIComponent(usuario.email.trim().toLowerCase());
+  const nomeCod = encodeURIComponent(usuario.nome.trim());
+  return `arteria-local:${emailCod}:${nomeCod}`;
 }
 
 /**
@@ -73,8 +81,6 @@ export async function autenticarProfissional(
     } catch {
       // Fallback resiliente caso o servidor Render esteja reiniciando
     }
-  } else {
-    await delay(250);
   }
 
   const emailLimpo = credenciais.email.trim().toLowerCase();
@@ -84,7 +90,7 @@ export async function autenticarProfissional(
   );
 
   const usuarioFinal: Usuario = encontrado ?? {
-    id: `med-${Date.now()}`,
+    id: `med-${emailLimpo}`,
     nome:
       emailLimpo === 'medico@arteria.med.br'
         ? 'Dra. Helena Vasconcelos'
@@ -96,25 +102,27 @@ export async function autenticarProfissional(
   };
   salvarMedicoLocal(usuarioFinal);
 
+  const tokenMedico = gerarTokenContingenciaPorMedico(usuarioFinal);
   return {
     usuario: usuarioFinal,
-    token: 'arteria-jwt-access-token-local',
-    refreshToken: 'arteria-jwt-refresh-token-local',
+    token: tokenMedico,
+    refreshToken: tokenMedico,
     expiresInMinutes: 120,
   };
 }
 
 /**
- * Cadastra um novo profissional médico (sem restrição de CRM) e retorna a sessão.
+ * Cadastra um novo profissional médico (sem restrição de CRM) e retorna a sessão isolada.
  */
 export async function registrarProfissional(
   dados: CadastroProfissionalFormData,
 ): Promise<AuthResponse> {
   const crmLimpo = (dados.crm ?? '').trim() || 'ISENTO';
   const ufLimpa = (dados.ufCrm ?? '').trim().toUpperCase() || 'DF';
+  const emailLimpo = dados.email.trim().toLowerCase();
   const payload = {
     nomeCompleto: dados.nomeCompleto.trim() || 'Dr(a). ArterIA',
-    email: dados.email.trim().toLowerCase(),
+    email: emailLimpo,
     senha: dados.senha,
     crm: crmLimpo,
     ufCrm: ufLimpa,
@@ -128,24 +136,23 @@ export async function registrarProfissional(
     } catch {
       // Fallback resiliente caso o servidor Render esteja reiniciando
     }
-  } else {
-    await delay(300);
   }
 
   const novoUsuario: Usuario = {
-    id: `med-${Date.now()}`,
+    id: `med-${emailLimpo}`,
     nome: payload.nomeCompleto,
     crm: `${crmLimpo}-${ufLimpa}`,
     crmNumero: crmLimpo,
     ufCrm: ufLimpa,
-    email: payload.email,
+    email: emailLimpo,
   };
   salvarMedicoLocal(novoUsuario);
 
+  const tokenMedico = gerarTokenContingenciaPorMedico(novoUsuario);
   return {
     usuario: novoUsuario,
-    token: 'arteria-jwt-access-token-local',
-    refreshToken: 'arteria-jwt-refresh-token-local',
+    token: tokenMedico,
+    refreshToken: tokenMedico,
     expiresInMinutes: 120,
   };
 }
@@ -210,7 +217,10 @@ export async function atualizarProfissionalPorId(
   payload: AtualizarProfissionalPayload,
 ): Promise<Usuario> {
   try {
-    const { data } = await api.put<Usuario>(`/auth/profissionais/${id}`, payload);
+    const { data } = await api.put<Usuario>(
+      `/auth/profissionais/${id}`,
+      payload,
+    );
     salvarMedicoLocal(data);
     return data;
   } catch {
