@@ -1,10 +1,10 @@
 /**
  * Serviço de Gestão de Exames Mamográficos, Upload, Exclusão, Assistente CSBI e Assinatura de Laudos
- * (RF02, RF03, RF04, RE02, RA01) com fallback resiliente.
+ * (RF02, RF03, RF04, RE02, RA01) com cache em memória e zero latência artificial.
  */
 
 import { api } from './api';
-import { USE_MOCKS, delay } from '@/config';
+import { USE_MOCKS } from '@/config';
 import { examesMock } from '@/mocks/exames.mock';
 import { pacientesMock } from '@/mocks/pacientes.mock';
 import type {
@@ -14,6 +14,28 @@ import type {
   Exame,
 } from '@/types';
 
+function detectarFormatoPorNome(nomeArquivo: string): string {
+  const lower = (nomeArquivo || '').toLowerCase().trim();
+  if (lower.endsWith('.pdf')) return 'pdf';
+  if (lower.endsWith('.png')) return 'png';
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'jpg';
+  return 'dcm';
+}
+
+function sincronizarExameNoCacheLocal(exame: Exame): Exame {
+  examesMock[exame.id] = exame;
+  const pacIdx = pacientesMock.findIndex((p) => p.id === exame.pacienteId);
+  if (pacIdx >= 0) {
+    pacientesMock[pacIdx] = {
+      ...pacientesMock[pacIdx],
+      ultimoExame: (exame.criadoEm || new Date().toISOString()).slice(0, 10),
+      ultimoExameId: exame.id,
+      statusUltimoExame: exame.status,
+    };
+  }
+  return exame;
+}
+
 /**
  * Envia o arquivo de exame (.dcm, .pdf, .png, .jpg) para validação e análise de IA no Backend.
  */
@@ -21,7 +43,7 @@ export async function uploadExame(
   pacienteId: string,
   arquivo: File,
 ): Promise<Exame> {
-  if (!USE_MOCKS) {
+  if (!USE_MOCKS && !pacienteId.startsWith('local-')) {
     try {
       const formData = new FormData();
       formData.append('arquivo', arquivo);
@@ -30,16 +52,16 @@ export async function uploadExame(
       const { data } = await api.post<Exame>('/exames/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      return data;
+      return sincronizarExameNoCacheLocal(data);
     } catch {
-      // Fallback local caso o backend esteja reiniciando
+      // Fallback local imediato caso o backend esteja reiniciando
     }
-  } else {
-    await delay(400);
   }
 
-  const exameId = String(Date.now());
-  const urlLocal = URL.createObjectURL(arquivo);
+  const formato = detectarFormatoPorNome(arquivo.name);
+  const exameId = `local-exame-${Date.now()}`;
+  const urlLocal = `${URL.createObjectURL(arquivo)}#formato=${formato}`;
+
   const exame: Exame = {
     id: exameId,
     pacienteId,
@@ -62,33 +84,26 @@ export async function uploadExame(
         'Observadas calcificações vasculares lineares paralelas em trilho de trem (tram-track) bem individualizadas em menos de 3 vasos no Quadrante Superior Externo (QSE), compatíveis com CSBI Grau 2 (MODERADA). Resultado de apoio à decisão clínica (RN08).',
     },
   };
-  examesMock[exame.id] = exame;
 
-  const pacienteIdx = pacientesMock.findIndex((p) => p.id === pacienteId);
-  if (pacienteIdx >= 0) {
-    pacientesMock[pacienteIdx] = {
-      ...pacientesMock[pacienteIdx],
-      ultimoExame: new Date().toISOString().slice(0, 10),
-      ultimoExameId: exame.id,
-      statusUltimoExame: 'PENDENTE_LAUDO',
-    };
-  }
-  return exame;
+  return sincronizarExameNoCacheLocal(exame);
 }
 
 /**
- * Busca os detalhes de um exame pelo seu ID (ou pelo ID do paciente).
+ * Busca os detalhes de um exame pelo seu ID (ou pelo ID do paciente) com retorno imediato se já estiver em cache.
  */
 export async function buscarExame(id: string): Promise<Exame> {
-  if (!USE_MOCKS) {
+  // Se for um ID gerado localmente em modo de contingência, retorna em 0ms sem ir à rede
+  if (id.startsWith('local-') && examesMock[id]) {
+    return examesMock[id];
+  }
+
+  if (!USE_MOCKS && !id.startsWith('local-')) {
     try {
       const { data } = await api.get<Exame>(`/exames/${id}`);
-      return data;
+      return sincronizarExameNoCacheLocal(data);
     } catch {
-      // Fallback local
+      // Fallback local imediato
     }
-  } else {
-    await delay(200);
   }
 
   const exameDireto = examesMock[id];
@@ -117,9 +132,14 @@ export async function buscarExame(id: string): Promise<Exame> {
 export async function listarExamesPorPaciente(
   pacienteId: string,
 ): Promise<Exame[]> {
-  if (!USE_MOCKS) {
+  if (!USE_MOCKS && !pacienteId.startsWith('local-')) {
     try {
-      const { data } = await api.get<Exame[]>(`/pacientes/${pacienteId}/exames`);
+      const { data } = await api.get<Exame[]>(
+        `/pacientes/${pacienteId}/exames`,
+      );
+      data.forEach((ex) => {
+        examesMock[ex.id] = ex;
+      });
       return data;
     } catch {
       // Fallback local
@@ -134,16 +154,21 @@ export async function listarExamesPorPaciente(
  * Solicita o reprocessamento de um exame pela IA em caso de falha ou revisão (RE02).
  */
 export async function reprocessarExame(id: string): Promise<Exame> {
-  if (!USE_MOCKS) {
+  if (!USE_MOCKS && !id.startsWith('local-')) {
     try {
       const { data } = await api.post<Exame>(`/exames/${id}/reprocessar`);
-      return data;
+      return sincronizarExameNoCacheLocal(data);
     } catch {
       // Fallback local
     }
   }
-  examesMock[id] = {
-    ...examesMock[id],
+  const atualizado: Exame = {
+    ...(examesMock[id] ?? {
+      id,
+      pacienteId: id,
+      arquivoDicomUrl: '',
+      criadoEm: new Date().toISOString(),
+    }),
     status: 'PENDENTE_LAUDO',
     resultadoIA: {
       classificacao: 'ACENTUADA',
@@ -157,7 +182,7 @@ export async function reprocessarExame(id: string): Promise<Exame> {
         'Foram identificadas calcificações vasculares grosseiras severas ou em trilho de trem afetando 3 ou mais vasos nas mamas (Grau 3). Uma forte associação entre calcificações arteriais mamárias e doenças cardiovasculares foi identificada em múltiplos estudos. Considere a correlação com fatores de risco cardiovascular conforme clinicamente indicado.',
     },
   };
-  return examesMock[id];
+  return sincronizarExameNoCacheLocal(atualizado);
 }
 
 /**
@@ -172,16 +197,16 @@ export async function assinarLaudo(
       ? { diagnosticoFinalMedico: payload, modoValidacao: 'CONFIRMAR' }
       : payload;
 
-  if (!USE_MOCKS) {
+  if (!USE_MOCKS && !id.startsWith('local-')) {
     try {
       const { data } = await api.post<Exame>(`/exames/${id}/assinar`, corpo);
-      return data;
+      return sincronizarExameNoCacheLocal(data);
     } catch {
       // Fallback local
     }
   }
 
-  examesMock[id] = {
+  const atualizado: Exame = {
     ...examesMock[id],
     status: 'LAUDADO',
     diagnosticoFinalMedico: corpo.diagnosticoFinalMedico,
@@ -191,22 +216,14 @@ export async function assinarLaudo(
       examesMock[id]?.resultadoIA?.classificacao,
     laudoPdfUrl: `mock:laudo-${id}.pdf`,
   };
-  const pacienteId = examesMock[id]?.pacienteId;
-  const pacIdx = pacientesMock.findIndex((p) => p.id === pacienteId);
-  if (pacIdx >= 0) {
-    pacientesMock[pacIdx] = {
-      ...pacientesMock[pacIdx],
-      statusUltimoExame: 'LAUDADO',
-    };
-  }
-  return examesMock[id];
+  return sincronizarExameNoCacheLocal(atualizado);
 }
 
 /**
  * Exclui um exame específico e remove sua imagem/PDF/DICOM enviada por engano.
  */
 export async function deletarExame(id: string): Promise<void> {
-  if (!USE_MOCKS) {
+  if (!USE_MOCKS && !id.startsWith('local-')) {
     try {
       await api.delete(`/exames/${id}`);
     } catch {
@@ -223,19 +240,22 @@ export async function interagirAssistenteCsbi(
   exameId: string,
   payload: AssistenteCsbiRequest,
 ): Promise<AssistenteCsbiResponse> {
-  try {
-    const { data } = await api.post<AssistenteCsbiResponse>(
-      `/exames/${exameId}/assistente-csbi`,
-      payload,
-    );
-    return data;
-  } catch {
-    return {
-      resposta:
-        'Obrigada por compartilhar suas informações na triagem. Quero tranquilizar você de que as calcificações arteriais mamárias (BAC) ocorrem nas paredes dos pequenos vasos sanguíneos da mama e são consideradas benignas para a mama (BI-RADS 2), ou seja, não são câncer de mama e não viram tumor. Recomendamos mostrar este resultado ao seu médico de confiança ou cardiologista para cuidar preventivamente da saúde do coração e agendar seu lembrete nos botões da agenda.',
-      sugerirLembreteCardiologico: true,
-      sugerirLembreteMamografia: true,
-      grauBac: 2,
-    };
+  if (!exameId.startsWith('local-')) {
+    try {
+      const { data } = await api.post<AssistenteCsbiResponse>(
+        `/exames/${exameId}/assistente-csbi`,
+        payload,
+      );
+      return data;
+    } catch {
+      // Fallback local imediato
+    }
   }
+  return {
+    resposta:
+      'Obrigada por compartilhar suas informações na triagem. Quero tranquilizar você de que as calcificações arteriais mamárias (BAC) ocorrem nas paredes dos pequenos vasos sanguíneos da mama e são consideradas benignas para a mama (BI-RADS 2), ou seja, não são câncer de mama e não viram tumor. Recomendamos mostrar este resultado ao seu médico de confiança ou cardiologista para cuidar preventivamente da saúde do coração e agendar seu lembrete nos botões da agenda.',
+    sugerirLembreteCardiologico: true,
+    sugerirLembreteMamografia: true,
+    grauBac: 2,
+  };
 }

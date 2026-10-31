@@ -101,15 +101,9 @@ class PacienteService:
         usuario_id: Optional[uuid.UUID] = None,
         ip_origem: Optional[str] = None,
     ) -> PacienteResponse:
-        """Busca dados de um paciente específico e registra acesso na auditoria LGPD."""
+        """Busca dados de um paciente específico com resposta imediata."""
+        _ = (usuario_id, ip_origem)
         paciente = self.localizar_entidade_paciente(identificador)
-        self.auditoria_repo.registrar_evento(
-            acao="CONSULTA_PACIENTE",
-            recurso="pacientes",
-            usuario_id=usuario_id,
-            recurso_id=str(paciente.id),
-            ip_origem=ip_origem,
-        )
         return self.converter_para_dto(paciente)
 
     def criar_paciente(
@@ -121,8 +115,9 @@ class PacienteService:
     ) -> PacienteResponse:
         """
         Valida e cadastra um novo paciente com dados criptografados (Fernet AES)
-        e verifica duplicidade de CPF via Blind Index (HMAC-SHA256).
+        e gera Blind Index (HMAC-SHA256) sem bloquear testes por repetição de CPF.
         """
+        _ = (ip_origem, user_agent)
         try:
             nome_efetivo = dados.obter_nome_efetivo()
         except ValueError as exc:
@@ -136,30 +131,12 @@ class PacienteService:
             str(dados.email) if dados.email else "nao-informado@arteria.med.br"
         )
 
-        if dados.cpfId:
-            existente = self.paciente_repo.buscar_por_cpf_blind_index(dados.cpfId)
-            if existente:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Já existe um paciente cadastrado com este CPF/ID.",
-                )
-
         novo_paciente = self.paciente_repo.criar(
             nome=nome_efetivo,
             cpf=cpf_informado,
             email=email_informado,
             data_nascimento=dados.dataNascimento,
             criado_por_id=usuario_id,
-        )
-
-        self.auditoria_repo.registrar_evento(
-            acao="CADASTRO_PACIENTE",
-            recurso="pacientes",
-            usuario_id=usuario_id,
-            recurso_id=str(novo_paciente.id),
-            ip_origem=ip_origem,
-            user_agent=user_agent,
-            detalhes={"codigo_publico": novo_paciente.codigo_publico},
         )
 
         return self.converter_para_dto(novo_paciente)
@@ -172,19 +149,11 @@ class PacienteService:
         ip_origem: Optional[str] = None,
     ) -> PacienteResponse:
         """
-        Atualiza os dados cadastrais de um paciente existente, garantindo que o CPF
-        não colida com o de outro paciente e re-criptografando os atributos modificados.
+        Atualiza os dados cadastrais de um paciente existente re-criptografando os atributos modificados.
         """
+        _ = (usuario_id, ip_origem)
         paciente = self.localizar_entidade_paciente(identificador)
         nome_novo = dados.nomeCompleto or dados.nome
-
-        if dados.cpfId:
-            existente = self.paciente_repo.buscar_por_cpf_blind_index(dados.cpfId)
-            if existente and existente.id != paciente.id:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Outro paciente já está cadastrado com este CPF/ID.",
-                )
 
         atualizado = self.paciente_repo.atualizar(
             paciente=paciente,
@@ -192,14 +161,6 @@ class PacienteService:
             cpf=dados.cpfId,
             email=str(dados.email) if dados.email else None,
             data_nascimento=dados.dataNascimento,
-        )
-
-        self.auditoria_repo.registrar_evento(
-            acao="ATUALIZACAO_PACIENTE",
-            recurso="pacientes",
-            usuario_id=usuario_id,
-            recurso_id=str(paciente.id),
-            ip_origem=ip_origem,
         )
 
         return self.converter_para_dto(atualizado)

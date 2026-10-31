@@ -1,8 +1,8 @@
 """
 Gerenciamento de Conexão e Sessão com o Neon Serverless PostgreSQL e Fallback Automático SQLite.
 
-Se a conexão com o banco externo (Neon) falhar ou estiver inacessível, faz fallback automático
-para o banco SQLite local para que o sistema nunca fique fora do ar.
+Otimizado para baixa latência: mantém conexões quentes no pool sem `SELECT 1` extra a cada requisição,
+e faz fallback automático para SQLite local se o banco externo estiver inacessível.
 """
 
 import logging
@@ -21,15 +21,16 @@ def _criar_engine_resiliente():
             eng = create_engine(
                 db_uri,
                 pool_pre_ping=True,
-                pool_recycle=300,
-                pool_size=5,
-                max_overflow=10,
-                connect_args={"connect_timeout": 8},
-                echo=settings.DEBUG,
+                pool_recycle=1800,
+                pool_size=10,
+                max_overflow=20,
+                pool_use_lifo=True,
+                connect_args={"connect_timeout": 5},
+                echo=False,
             )
             with eng.connect() as conn:
                 conn.execute(text("SELECT 1"))
-            logger.info("Conectado com sucesso ao PostgreSQL (Neon).")
+            logger.info("Conectado com sucesso ao PostgreSQL (Neon) com pool otimizado.")
             return eng
         except Exception as exc:
             logger.warning(
@@ -40,7 +41,7 @@ def _criar_engine_resiliente():
     return create_engine(
         "sqlite:///./arteria_dev_vault.db",
         connect_args={"check_same_thread": False},
-        echo=settings.DEBUG,
+        echo=False,
     )
 
 

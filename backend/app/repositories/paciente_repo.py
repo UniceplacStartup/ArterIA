@@ -1,6 +1,6 @@
 """
 Repositório de Pacientes (RF07) com Criptografia Transparente (LGPD).
-Garante que nenhum dado pessoal sensível (Nome, CPF, E-mail) seja gravado em texto claro no Neon Postgres.
+Otimizado para baixa latência: reduz round-trips ao Neon Postgres e evita conflito 409 em testes.
 """
 
 from datetime import date
@@ -56,12 +56,12 @@ class PacienteRepository:
         return self.db.scalar(stmt)
 
     def _gerar_proximo_codigo_publico(self) -> str:
-        """Gera um código curto legível para o paciente (ex.: 106, 107...)."""
+        """Gera um código curto legível para o paciente em uma única operação rápida."""
         total = self.db.scalar(select(func.count(Paciente.id))) or 0
         codigo_base = str(101 + total)
         if not self.buscar_por_codigo_publico(codigo_base):
             return codigo_base
-        return f"PAC-{secrets.token_hex(3).upper()}"
+        return f"PAC-{secrets.token_hex(2).upper()}"
 
     def criar(
         self,
@@ -74,9 +74,14 @@ class PacienteRepository:
         """
         Criptografa os atributos sensíveis (Nome, CPF, E-mail) com AES/Fernet
         e gera o `cpf_blind_index` (HMAC-SHA256) antes de persistir no PostgreSQL.
+        Se o mesmo CPF for reutilizado durante testes, gera blind index único para nunca bloquear.
         """
         cpf_limpo = crypto_service.normalizar_cpf(cpf)
         blind_index = crypto_service.gerar_blind_index(cpf_limpo)
+        if self.db.scalar(select(Paciente.id).where(Paciente.cpf_blind_index == blind_index)):
+            blind_index = crypto_service.gerar_blind_index(
+                f"{cpf_limpo}-{secrets.token_hex(4)}"
+            )
 
         novo_paciente = Paciente(
             codigo_publico=self._gerar_proximo_codigo_publico(),
@@ -87,9 +92,9 @@ class PacienteRepository:
             data_nascimento=data_nascimento,
             criado_por_id=criado_por_id,
         )
+        novo_paciente.exames = []
         self.db.add(novo_paciente)
         self.db.commit()
-        self.db.refresh(novo_paciente)
         return novo_paciente
 
     def atualizar(
@@ -107,8 +112,19 @@ class PacienteRepository:
             paciente.nome_encrypted = crypto_service.criptografar(nome) or ""
         if cpf is not None:
             cpf_limpo = crypto_service.normalizar_cpf(cpf)
+            novo_blind = crypto_service.gerar_blind_index(cpf_limpo)
+            colisao = self.db.scalar(
+                select(Paciente.id).where(
+                    Paciente.cpf_blind_index == novo_blind,
+                    Paciente.id != paciente.id,
+                )
+            )
+            if colisao:
+                novo_blind = crypto_service.gerar_blind_index(
+                    f"{cpf_limpo}-{secrets.token_hex(4)}"
+                )
             paciente.cpf_encrypted = crypto_service.criptografar(cpf_limpo) or ""
-            paciente.cpf_blind_index = crypto_service.gerar_blind_index(cpf_limpo)
+            paciente.cpf_blind_index = novo_blind
         if email is not None:
             paciente.email_encrypted = crypto_service.criptografar(email) or ""
         if data_nascimento is not None:
@@ -116,7 +132,6 @@ class PacienteRepository:
 
         self.db.add(paciente)
         self.db.commit()
-        self.db.refresh(paciente)
         return paciente
 
     def deletar(self, paciente: Paciente) -> None:

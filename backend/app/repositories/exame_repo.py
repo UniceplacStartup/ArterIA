@@ -1,5 +1,6 @@
 """
 Repositório de Exames e Resultados da IA (RF02, RF03, RF04, RE02).
+Otimizado com `selectinload` completo para evitar queries N+1 em conexões cloud (Neon).
 """
 
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ from app.models.exame import (
     ResultadoIA,
     StatusExameEnum,
 )
+from app.models.paciente import Paciente
 
 
 class ExameRepository:
@@ -24,10 +26,15 @@ class ExameRepository:
         self.db = db
 
     def buscar_por_id(self, exame_id: uuid.UUID) -> Optional[Exame]:
-        """Busca exame pelo UUID com o resultado da IA pré-carregado."""
+        """Busca exame pelo UUID com o resultado da IA e paciente pré-carregados."""
         stmt = (
             select(Exame)
-            .options(selectinload(Exame.resultado_ia))
+            .options(
+                selectinload(Exame.resultado_ia),
+                selectinload(Exame.paciente)
+                .selectinload(Paciente.exames)
+                .selectinload(Exame.resultado_ia),
+            )
             .where(Exame.id == exame_id)
         )
         return self.db.scalar(stmt)
@@ -36,7 +43,12 @@ class ExameRepository:
         """Retorna todo o histórico de exames de um paciente em ordem cronológica reversa (RN06)."""
         stmt = (
             select(Exame)
-            .options(selectinload(Exame.resultado_ia))
+            .options(
+                selectinload(Exame.resultado_ia),
+                selectinload(Exame.paciente)
+                .selectinload(Paciente.exames)
+                .selectinload(Exame.resultado_ia),
+            )
             .where(Exame.paciente_id == paciente_id)
             .order_by(Exame.criado_em.desc())
         )
@@ -49,7 +61,7 @@ class ExameRepository:
         nome_arquivo_seguro: str,
         sha256_hash: str,
         tamanho_bytes: int,
-        status_inicial: StatusExameEnum = StatusExameEnum.PROCESSANDO,
+        status_inicial: StatusExameEnum = StatusExameEnum.PENDENTE_LAUDO,
     ) -> Exame:
         """Registra um novo exame mamográfico vinculado ao paciente (RN01 e RN02)."""
         exame = Exame(
@@ -62,7 +74,6 @@ class ExameRepository:
         )
         self.db.add(exame)
         self.db.commit()
-        self.db.refresh(exame)
         return exame
 
     def salvar_resultado_ia(
@@ -73,7 +84,8 @@ class ExameRepository:
         padrao: str,
         nivel_confianca: float,
         leitura_tecnica: str,
-        tempo_processamento_ms: int = 1200,
+        tempo_processamento_ms: int = 120,
+        versao_modelo: str = "ArterIA-CSBI-TopHat",
     ) -> Exame:
         """
         Registra ou atualiza o resultado da análise de IA para o exame (RN04)
@@ -86,6 +98,7 @@ class ExameRepository:
             exame.resultado_ia.nivel_confianca = nivel_confianca
             exame.resultado_ia.leitura_tecnica = leitura_tecnica
             exame.resultado_ia.tempo_processamento_ms = tempo_processamento_ms
+            exame.resultado_ia.versao_modelo = versao_modelo
         else:
             novo_resultado = ResultadoIA(
                 exame_id=exame.id,
@@ -95,13 +108,14 @@ class ExameRepository:
                 nivel_confianca=nivel_confianca,
                 leitura_tecnica=leitura_tecnica,
                 tempo_processamento_ms=tempo_processamento_ms,
+                versao_modelo=versao_modelo,
             )
             self.db.add(novo_resultado)
+            exame.resultado_ia = novo_resultado
 
         exame.status = StatusExameEnum.PENDENTE_LAUDO
         self.db.add(exame)
         self.db.commit()
-        self.db.refresh(exame)
         return exame
 
     def atualizar_status(self, exame: Exame, novo_status: StatusExameEnum) -> Exame:
@@ -109,7 +123,6 @@ class ExameRepository:
         exame.status = novo_status
         self.db.add(exame)
         self.db.commit()
-        self.db.refresh(exame)
         return exame
 
     def assinar_laudo(
@@ -135,11 +148,9 @@ class ExameRepository:
 
         self.db.add(exame)
         self.db.commit()
-        self.db.refresh(exame)
         return exame
 
     def deletar(self, exame: Exame) -> None:
         """Remove o exame e seu resultado de IA vinculado."""
         self.db.delete(exame)
         self.db.commit()
-

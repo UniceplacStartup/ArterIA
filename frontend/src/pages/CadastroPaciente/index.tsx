@@ -1,15 +1,17 @@
 /**
- * Página de Cadastro de Paciente + Upload Inicial de Exame DICOM (RF02 / RF07).
+ * Página de Cadastro de Paciente + Upload Inicial de Exame (RF02 / RF07).
  *
- * Os dados pessoais sensíveis (Nome, CPF/ID, E-mail) são enviados via canal seguro ao Backend Python,
- * onde recebem criptografia simétrica autenticada (AES/Fernet) e Blind Indexing (HMAC-SHA256)
- * antes da persistência no banco PostgreSQL (Neon).
+ * Otimizada para resposta instantânea:
+ * - Permite cadastrar o paciente com exame anexado (indo direto para o resultado da IA)
+ *   ou sem exame inicial (indo para a página do paciente pronta para upload futuro).
+ * - Atualiza o cache do React Query imediatamente antes de navegar para evitar telas de carregamento.
  */
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, Controller } from 'react-hook-form';
 import { TextField, Button, Stack, Typography, Box } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
   cadastroPacienteSchema,
@@ -25,9 +27,11 @@ import { DicomUpload } from '@/components/Upload/DicomUpload';
 import { FieldWrapper } from '@/components/FieldWrapper/FieldWrapper';
 import { useCriarPaciente } from '@/hooks/usePacientes';
 import { useUploadExame } from '@/hooks/useExame';
+import type { Exame, Paciente } from '@/types';
 
 export default function CadastroPaciente() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { mutateAsync: cadastrarPaciente } = useCriarPaciente();
   const { mutateAsync: enviarExameDicom } = useUploadExame();
 
@@ -40,7 +44,7 @@ export default function CadastroPaciente() {
     defaultValues: {
       nomeCompleto: '',
       cpfId: '',
-      dataNascimento: '',
+      dataNascimento: '1975-06-15',
       email: '',
       exame: undefined,
     },
@@ -48,27 +52,63 @@ export default function CadastroPaciente() {
 
   const onSubmit = async (data: CadastroPacienteFormData) => {
     try {
-      // 1. Cadastra o paciente (dados criptografados em repouso no Neon Postgres)
+      // 1. Cadastra o paciente
       const novoPaciente = await cadastrarPaciente({
-        nomeCompleto: data.nomeCompleto,
-        cpfId: data.cpfId,
-        dataNascimento: data.dataNascimento,
-        email: data.email,
+        nomeCompleto: data.nomeCompleto.trim(),
+        cpfId: data.cpfId.trim(),
+        dataNascimento: data.dataNascimento || '1975-06-15',
+        email: data.email?.trim() || undefined,
       });
 
-      // 2. Realiza o upload do arquivo DICOM vinculado ao paciente recém-criado
-      const exameCriado = await enviarExameDicom({
+      // Atualiza imediatamente a lista em cache no React Query
+      queryClient.setQueryData<Paciente[]>(['pacientes'], (antigos) => {
+        const lista = antigos ? [...antigos] : [];
+        const semDuplicata = lista.filter((p) => p.id !== novoPaciente.id);
+        return [novoPaciente, ...semDuplicata];
+      });
+
+      // 2. Se o usuário anexou um exame, faz o upload e navega direto para a análise
+      if (data.exame instanceof File) {
+        const exameCriado = await enviarExameDicom({
+          pacienteId: novoPaciente.id,
+          arquivo: data.exame,
+        });
+
+        queryClient.setQueryData<Exame>(['exame', exameCriado.id], exameCriado);
+        queryClient.setQueryData<Exame[]>(
+          ['exames-paciente', novoPaciente.id],
+          [exameCriado],
+        );
+
+        toast.success(
+          'Paciente cadastrado e exame analisado com sucesso!',
+        );
+        navigate(`/resultado/${exameCriado.id}`);
+        return;
+      }
+
+      // 3. Caso tenha cadastrado apenas os dados do paciente (sem arquivo no momento)
+      const estadoPendente: Exame = {
+        id: novoPaciente.id,
         pacienteId: novoPaciente.id,
-        arquivo: data.exame,
-      });
-
-      toast.success(
-        'Paciente cadastrado e exame enviado para análise com segurança!',
+        arquivoDicomUrl: '',
+        status: 'PENDENTE',
+        criadoEm: new Date().toISOString(),
+      };
+      queryClient.setQueryData<Exame>(
+        ['exame', novoPaciente.id],
+        estadoPendente,
       );
-      navigate(`/resultado/${exameCriado.id}`);
+      queryClient.setQueryData<Exame[]>(
+        ['exames-paciente', novoPaciente.id],
+        [],
+      );
+
+      toast.success('Paciente cadastrado com sucesso!');
+      navigate(`/resultado/${novoPaciente.id}`);
     } catch {
       toast.error(
-        'Não foi possível concluir o cadastro do paciente ou envio do arquivo DICOM.',
+        'Não foi possível concluir o cadastro do paciente.',
       );
     }
   };
@@ -120,7 +160,7 @@ export default function CadastroPaciente() {
                   render={({ field }) => (
                     <TextField
                       {...field}
-                      placeholder="CPF/ID (protegido por criptografia LGPD)"
+                      placeholder="CPF ou ID do paciente"
                       fullWidth
                       error={!!errors.cpfId}
                       helperText={errors.cpfId?.message}
@@ -146,14 +186,14 @@ export default function CadastroPaciente() {
                 />
               </FieldWrapper>
 
-              <FieldWrapper label="E-mail">
+              <FieldWrapper label="E-mail (opcional)">
                 <Controller
                   name="email"
                   control={control}
                   render={({ field }) => (
                     <TextField
                       {...field}
-                      placeholder="E-mail"
+                      placeholder="E-mail (opcional)"
                       type="email"
                       fullWidth
                       error={!!errors.email}

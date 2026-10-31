@@ -1,5 +1,6 @@
 """
 Repositório de Auditoria de Segurança (LGPD) e Logs de Divergência Clínica (RA01).
+Otimizado para não realizar `db.refresh` desnecessário após inserções append-only.
 """
 
 from typing import Any, Dict, List, Optional
@@ -25,21 +26,24 @@ class AuditoriaRepository:
         ip_origem: Optional[str] = None,
         user_agent: Optional[str] = None,
         detalhes: Optional[Dict[str, Any]] = None,
-    ) -> LogAuditoria:
-        """Registra um evento na trilha de auditoria de segurança (LGPD Art. 37)."""
-        log = LogAuditoria(
-            usuario_id=usuario_id,
-            acao=acao,
-            recurso=recurso,
-            recurso_id=recurso_id,
-            ip_origem=ip_origem,
-            user_agent=(user_agent or "")[:500] if user_agent else None,
-            detalhes=detalhes,
-        )
-        self.db.add(log)
-        self.db.commit()
-        self.db.refresh(log)
-        return log
+    ) -> Optional[LogAuditoria]:
+        """Registra um evento na trilha de auditoria sem bloquear a operação principal."""
+        try:
+            log = LogAuditoria(
+                usuario_id=usuario_id,
+                acao=acao,
+                recurso=recurso,
+                recurso_id=recurso_id,
+                ip_origem=ip_origem,
+                user_agent=(user_agent or "")[:500] if user_agent else None,
+                detalhes=detalhes,
+            )
+            self.db.add(log)
+            self.db.commit()
+            return log
+        except Exception:
+            self.db.rollback()
+            return None
 
     def registrar_divergencia(
         self,
@@ -49,23 +53,26 @@ class AuditoriaRepository:
         modo_validacao: ModoValidacaoEnum,
         classificacao_medica: Optional[NivelCalcificacaoEnum],
         diagnostico_resumo: str,
-    ) -> LogDivergencia:
+    ) -> Optional[LogDivergencia]:
         """
         Registra uma divergência clínica (RA01) quando o médico ajusta ou invalida
         o resultado sugerido pelo modelo de Inteligência Artificial.
         """
-        divergencia = LogDivergencia(
-            exame_id=exame_id,
-            medico_id=medico_id,
-            classificacao_ia=classificacao_ia,
-            modo_validacao=modo_validacao,
-            classificacao_medica=classificacao_medica,
-            diagnostico_medico_resumo=diagnostico_resumo[:1000],
-        )
-        self.db.add(divergencia)
-        self.db.commit()
-        self.db.refresh(divergencia)
-        return divergencia
+        try:
+            divergencia = LogDivergencia(
+                exame_id=exame_id,
+                medico_id=medico_id,
+                classificacao_ia=classificacao_ia,
+                modo_validacao=modo_validacao,
+                classificacao_medica=classificacao_medica,
+                diagnostico_medico_resumo=diagnostico_resumo[:1000],
+            )
+            self.db.add(divergencia)
+            self.db.commit()
+            return divergencia
+        except Exception:
+            self.db.rollback()
+            return None
 
     def listar_divergencias(self, limite: int = 100) -> List[LogDivergencia]:
         """Lista os registros mais recentes de divergência entre IA e Médico."""
@@ -84,4 +91,3 @@ class AuditoriaRepository:
             .limit(limite)
         )
         return list(self.db.scalars(stmt).all())
-

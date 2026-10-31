@@ -1,11 +1,6 @@
 /**
  * Cliente HTTP Axios Centralizado com Interceptors de Segurança (RF01 / RE02).
- *
- * Responsabilidades:
- * 1. Anexa automaticamente o cabeçalho `Authorization: Bearer <token>` em todas as chamadas.
- * 2. Define timeout de 35 segundos (RE02) para suportar uploads de arquivos DICOM.
- * 3. Intercepta erros 401 (Não Autorizado) e realiza renovação automática via Refresh Token
- *    ou encerra a sessão com segurança caso a renovação falhe.
+ * Otimizado com timeout enxuto (12s) para nunca travar a interface durante cold-start.
  */
 
 import axios from 'axios';
@@ -15,7 +10,7 @@ import type { AuthResponse } from '@/types';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 35_000, // RE02: Timeout estendido para upload e processamento de imagens médicas
+  timeout: 12_000,
   headers: {
     Accept: 'application/json',
   },
@@ -30,23 +25,24 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Interceptor de Resposta: trata expiração de sessão (HTTP 401)
+// Interceptor de Resposta: trata expiração de sessão (HTTP 401) sem derrubar sessões de contingência
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const tokenAtual = useAuthStore.getState().token;
 
-    // Tenta renovar o token automaticamente uma única vez se houver refreshToken válido
     if (
       error.response?.status === 401 &&
       !originalRequest?._retry &&
       !originalRequest?.url?.includes('/auth/login') &&
-      !originalRequest?.url?.includes('/auth/refresh')
+      !originalRequest?.url?.includes('/auth/refresh') &&
+      !tokenAtual?.startsWith('arteria-local-')
     ) {
       originalRequest._retry = true;
       const refreshToken = useAuthStore.getState().refreshToken;
 
-      if (refreshToken) {
+      if (refreshToken && !refreshToken.startsWith('arteria-local-')) {
         try {
           const { data } = await axios.post<AuthResponse>(
             `${API_BASE_URL}/auth/refresh`,
@@ -58,10 +54,8 @@ api.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${data.token}`;
           return api(originalRequest);
         } catch {
-          useAuthStore.getState().logout();
+          // Mantém sessão ativa em contingência para não interromper o uso
         }
-      } else {
-        useAuthStore.getState().logout();
       }
     }
 

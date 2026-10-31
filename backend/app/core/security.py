@@ -18,11 +18,11 @@ from app.core.config import settings
 
 def gerar_hash_senha(senha_plana: str) -> str:
     """
-    Gera um hash Bcrypt seguro com salt aleatório de 12 rounds.
+    Gera um hash Bcrypt seguro com salt aleatório de 10 rounds (otimizado para baixa latência em cloud).
     Trunca em 72 bytes (limite algorítmico do Bcrypt) após codificação UTF-8.
     """
     senha_bytes = senha_plana.encode("utf-8")[:72]
-    salt = bcrypt.gensalt(rounds=12)
+    salt = bcrypt.gensalt(rounds=10)
     hashed = bcrypt.hashpw(senha_bytes, salt)
     return hashed.decode("utf-8")
 

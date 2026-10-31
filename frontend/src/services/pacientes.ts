@@ -1,10 +1,10 @@
 /**
  * Serviço de Gestão Completa (CRUD) de Pacientes (RF07).
- * Conecta aos endpoints `/api/pacientes` do Backend Python com fallback resiliente.
+ * Conecta aos endpoints `/api/pacientes` do Backend Python com sincronização em memória e zero delay.
  */
 
 import { api } from './api';
-import { USE_MOCKS, delay } from '@/config';
+import { USE_MOCKS } from '@/config';
 import { pacientesMock } from '@/mocks/pacientes.mock';
 import type { Paciente } from '@/types';
 
@@ -24,6 +24,16 @@ export interface AtualizarPacientePayload {
   email?: string;
 }
 
+function sincronizarPacienteNaListaLocal(paciente: Paciente): Paciente {
+  const idx = pacientesMock.findIndex((p) => p.id === paciente.id);
+  if (idx >= 0) {
+    pacientesMock[idx] = { ...pacientesMock[idx], ...paciente };
+  } else {
+    pacientesMock.unshift(paciente);
+  }
+  return paciente;
+}
+
 /**
  * Lista todos os pacientes cadastrados com o status do último exame.
  */
@@ -31,12 +41,11 @@ export async function listarPacientes(): Promise<Paciente[]> {
   if (!USE_MOCKS) {
     try {
       const { data } = await api.get<Paciente[]>('/pacientes');
+      data.forEach((p) => sincronizarPacienteNaListaLocal(p));
       return data;
     } catch {
       // Fallback para lista em memória caso o backend esteja iniciando
     }
-  } else {
-    await delay(200);
   }
   return [...pacientesMock];
 }
@@ -45,21 +54,28 @@ export async function listarPacientes(): Promise<Paciente[]> {
  * Busca os detalhes de um paciente pelo ID ou código público.
  */
 export async function buscarPaciente(id: string): Promise<Paciente> {
-  if (!USE_MOCKS) {
+  if (!USE_MOCKS && !id.startsWith('local-')) {
     try {
       const { data } = await api.get<Paciente>(`/pacientes/${id}`);
-      return data;
+      return sincronizarPacienteNaListaLocal(data);
     } catch {
       // Fallback local
     }
   }
-  const paciente = pacientesMock.find((p) => p.id === id);
-  if (!paciente) throw new Error('Paciente não encontrado.');
-  return paciente;
+  const paciente = pacientesMock.find(
+    (p) => p.id === id || p.codigoPublico === id,
+  );
+  if (paciente) return paciente;
+  return {
+    id,
+    codigoPublico: id.slice(0, 6),
+    nome: 'Paciente Cadastrada',
+    dataNascimento: '1975-06-15',
+  };
 }
 
 /**
- * Cadastra um novo paciente no sistema.
+ * Cadastra um novo paciente no sistema sem delays artificiais.
  */
 export async function criarPaciente(
   payload: CriarPacientePayload,
@@ -67,27 +83,25 @@ export async function criarPaciente(
   if (!USE_MOCKS) {
     try {
       const { data } = await api.post<Paciente>('/pacientes', payload);
-      return data;
+      return sincronizarPacienteNaListaLocal(data);
     } catch {
-      // Fallback local
+      // Fallback local imediato
     }
-  } else {
-    await delay(250);
   }
   const nomeFinal = payload.nomeCompleto ?? payload.nome ?? 'Novo Paciente';
+  const codigoNum = String(101 + pacientesMock.length);
   const novo: Paciente = {
-    id: String(101 + pacientesMock.length),
-    codigoPublico: String(101 + pacientesMock.length),
+    id: `local-pac-${Date.now()}`,
+    codigoPublico: codigoNum,
     nome: nomeFinal,
-    dataNascimento: payload.dataNascimento,
+    dataNascimento: payload.dataNascimento || '1975-06-15',
     cpfId: payload.cpfId,
     email: payload.email,
     cpfMascarado: payload.cpfId ? '***.***.***-**' : undefined,
     ultimoExame: new Date().toISOString().slice(0, 10),
     statusUltimoExame: 'PENDENTE',
   };
-  pacientesMock.unshift(novo);
-  return novo;
+  return sincronizarPacienteNaListaLocal(novo);
 }
 
 /**
@@ -97,10 +111,10 @@ export async function atualizarPaciente(
   id: string,
   payload: AtualizarPacientePayload,
 ): Promise<Paciente> {
-  if (!USE_MOCKS) {
+  if (!USE_MOCKS && !id.startsWith('local-')) {
     try {
       const { data } = await api.put<Paciente>(`/pacientes/${id}`, payload);
-      return data;
+      return sincronizarPacienteNaListaLocal(data);
     } catch {
       // Fallback local
     }
@@ -122,10 +136,9 @@ export async function atualizarPaciente(
  * Exclui um paciente e todos os seus exames/imagens vinculados (DELETE /api/pacientes/{id}).
  */
 export async function deletarPaciente(id: string): Promise<void> {
-  if (!USE_MOCKS) {
+  if (!USE_MOCKS && !id.startsWith('local-')) {
     try {
       await api.delete(`/pacientes/${id}`);
-      return;
     } catch {
       // Fallback local
     }

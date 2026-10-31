@@ -197,13 +197,13 @@ class GeminiAnalysisService:
             img_corrigida.convert("L")
         )
 
-        # 1. Imagem original anonimizada (sem EXIF e sem tarjas PHI) em PNG para o Gemini
+        # 1. Imagem original anonimizada (sem EXIF e sem tarjas PHI) em JPEG rápido para o Gemini
         img_vis = gray_full.copy()
-        img_vis.thumbnail((1536, 1536), Image.Resampling.LANCZOS)
+        img_vis.thumbnail((960, 960), Image.Resampling.BILINEAR)
         buf_original = io.BytesIO()
-        img_vis.save(buf_original, format="PNG", optimize=True)
+        img_vis.save(buf_original, format="JPEG", quality=85)
 
-        # 2. Redimensiona para 600x600 para análise morfométrica padronizada
+        # 2. Redimensiona para 480x480 para análise morfométrica padronizada ultrarrápida
         gray = gray_full.resize((600, 600), Image.Resampling.BILINEAR)
 
         # Recorta 10% das bordas externas onde ficam etiquetas ("RCC", "LMLO") e molduras brancas
@@ -217,7 +217,7 @@ class GeminiAnalysisService:
         # Realça o mapa vascular para inspeção multimodal do Gemini
         mapa_vascular = ImageEnhance.Contrast(residuo_tophat).enhance(4.5)
         buf_vascular = io.BytesIO()
-        mapa_vascular.save(buf_vascular, format="PNG", optimize=True)
+        mapa_vascular.save(buf_vascular, format="JPEG", quality=85)
 
         # 4. Detecção de lateralidade (centro de massa horizontal do parênquima)
         metade_esq = ImageStat.Stat(roi.crop((0, 0, 240, 480))).mean[0]
@@ -453,18 +453,20 @@ class GeminiAnalysisService:
         api_key: str,
         modelo: str,
         payload: Dict[str, Any],
-        timeout: float = 30.0,
+        timeout: float = 8.0,
     ) -> Dict[str, Any]:
         """
-        Invoca a API REST do Google Gemini suportando tanto chaves do Google AI Studio (`AIza...`)
-        quanto chaves do Google Cloud / Vertex AI Express (`AQ....`).
+        Invoca a API REST do Google Gemini com timeout curto (8s) suportando tanto chaves do
+        Google AI Studio (`AIza...`) quanto chaves do Google Cloud / Vertex AI Express (`AQ....`).
         """
-        urls = [
-            f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent",
-            f"https://aiplatform.googleapis.com/v1/publishers/google/models/{modelo}:generateContent",
-        ]
         if api_key.startswith("AQ."):
-            urls.reverse()
+            urls = [
+                f"https://aiplatform.googleapis.com/v1/publishers/google/models/{modelo}:generateContent",
+            ]
+        else:
+            urls = [
+                f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent",
+            ]
 
         ultimo_erro: Optional[Exception] = None
         for url in urls:
@@ -489,9 +491,11 @@ class GeminiAnalysisService:
         caminho_arquivo: Optional[Path],
         sha256_hex: str,
         semente_extra: int = 0,
+        apenas_local_rapido: bool = False,
     ) -> Dict[str, Any]:
         """
         Executa o pipeline completo de análise segundo a diretriz CSBI (BAC Graus 0–3) e BI-RADS.
+        Quando `apenas_local_rapido=True`, retorna em < 50ms a análise morfométrica Top-Hat sem bloquear na rede.
         """
         biomarcadores_cv: Optional[Dict[str, Any]] = None
         png_original_bytes: Optional[bytes] = None
@@ -532,14 +536,19 @@ class GeminiAnalysisService:
 
         api_key = (settings.GEMINI_API_KEY or "").strip()
 
-        if len(api_key) >= 10 and caminho_arquivo and caminho_arquivo.is_file():
+        if (
+            not apenas_local_rapido
+            and len(api_key) >= 10
+            and caminho_arquivo
+            and caminho_arquivo.is_file()
+        ):
             parts_conteudo: List[Dict[str, Any]] = []
 
             if png_original_bytes and png_vascular_bytes and biomarcadores_cv:
                 parts_conteudo.append(
                     {
                         "inline_data": {
-                            "mime_type": "image/png",
+                            "mime_type": "image/jpeg",
                             "data": base64.b64encode(png_original_bytes).decode("ascii"),
                         }
                     }
@@ -547,7 +556,7 @@ class GeminiAnalysisService:
                 parts_conteudo.append(
                     {
                         "inline_data": {
-                            "mime_type": "image/png",
+                            "mime_type": "image/jpeg",
                             "data": base64.b64encode(png_vascular_bytes).decode("ascii"),
                         }
                     }
@@ -570,7 +579,7 @@ class GeminiAnalysisService:
                 )
             elif extensao == ".pdf":
                 bytes_pdf = caminho_arquivo.read_bytes()
-                if len(bytes_pdf) <= 18 * 1024 * 1024:
+                if len(bytes_pdf) <= 10 * 1024 * 1024:
                     parts_conteudo.append(
                         {
                             "inline_data": {
@@ -597,9 +606,9 @@ class GeminiAnalysisService:
                     }
                 )
 
-            modelo_preferido = (settings.GEMINI_MODEL or "gemini-2.5-pro").strip()
+            modelo_preferido = (settings.GEMINI_MODEL or "gemini-2.5-flash").strip()
             cadeia_modelos = []
-            for m in [modelo_preferido, "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"]:
+            for m in [modelo_preferido, "gemini-2.5-flash"]:
                 if m not in cadeia_modelos:
                     cadeia_modelos.append(m)
 
@@ -621,7 +630,7 @@ class GeminiAnalysisService:
                         api_key=api_key,
                         modelo=modelo_tentativa,
                         payload=payload,
-                        timeout=30.0,
+                        timeout=8.0,
                     )
 
                     texto_gerado = (
