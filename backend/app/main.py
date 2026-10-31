@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.exceptions import registrar_exception_handlers
@@ -37,6 +38,14 @@ async def lifespan(_app: FastAPI):
     logger.info("Iniciando %s no ambiente [%s]...", settings.APP_NAME, settings.ENVIRONMENT)
     try:
         Base.metadata.create_all(bind=engine)
+        if engine.dialect.name == "postgresql":
+            try:
+                with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+                    conn.execute(
+                        text("ALTER TYPE nivel_calcificacao_enum ADD VALUE IF NOT EXISTS 'AUSENTE'")
+                    )
+            except Exception:
+                pass
         popular_dados_iniciais()
         logger.info("Banco de dados inicializado e pronto para uso.")
     except Exception as exc:
