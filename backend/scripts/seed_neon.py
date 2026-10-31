@@ -40,6 +40,13 @@ def popular_dados_iniciais() -> None:
                 uf_crm="DF",
             )
             logger.info("Médico inicial criado: %s (CRM 123456-DF)", email_demo)
+        else:
+            # Garante que a conta padrão esteja sempre ativa, desbloqueada e com a senha padrão
+            medico.senha_hash = gerar_hash_senha("ArterIA@2026")
+            medico.ativo = True
+            medico.tentativas_falhas_login = 0
+            medico.bloqueado_ate = None
+            usuario_repo.atualizar(medico)
 
         pacientes_existentes = paciente_repo.listar_todos()
         if not pacientes_existentes:

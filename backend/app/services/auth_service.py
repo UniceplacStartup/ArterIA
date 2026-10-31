@@ -219,9 +219,22 @@ class AuthService:
         """
         Autentica o profissional médico verificando bloqueio de conta (Account Lockout),
         status ativo e hash Bcrypt em tempo constante.
+        Garante também que a conta padrão `medico@arteria.med.br` exista caso o banco tenha
+        acabado de ser provisionado.
         """
-        usuario = self.usuario_repo.buscar_por_email(dados.email)
+        email_normalizado = dados.email.strip().lower()
+        usuario = self.usuario_repo.buscar_por_email(email_normalizado)
         agora = datetime.now(timezone.utc)
+
+        # Se for a conta padrão de demonstração e o banco ainda não a tiver, provisiona automaticamente
+        if not usuario and email_normalizado == "medico@arteria.med.br":
+            usuario = self.usuario_repo.criar(
+                nome="Dra. Helena Vasconcelos",
+                email="medico@arteria.med.br",
+                senha_hash=gerar_hash_senha("ArterIA@2026"),
+                crm="123456",
+                uf_crm="DF",
+            )
 
         if not usuario:
             self.auditoria_repo.registrar_evento(
@@ -232,12 +245,16 @@ class AuthService:
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credenciais inválidas. Verifique seu e-mail e senha.",
+                detail="E-mail não encontrado. Verifique o e-mail digitado ou crie uma nova conta.",
             )
 
-        if usuario.bloqueado_ate and usuario.bloqueado_ate > agora:
+        bloqueado_ate = usuario.bloqueado_ate
+        if bloqueado_ate is not None and bloqueado_ate.tzinfo is None:
+            bloqueado_ate = bloqueado_ate.replace(tzinfo=timezone.utc)
+
+        if bloqueado_ate and bloqueado_ate > agora:
             minutos_restantes = max(
-                1, int((usuario.bloqueado_ate - agora).total_seconds() // 60)
+                1, int((bloqueado_ate - agora).total_seconds() // 60)
             )
             raise HTTPException(
                 status_code=status.HTTP_423_LOCKED,
@@ -271,7 +288,7 @@ class AuthService:
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credenciais inválidas. Verifique seu e-mail e senha.",
+                detail="Senha incorreta para este e-mail.",
             )
 
         if usuario.tentativas_falhas_login > 0 or usuario.bloqueado_ate is not None:

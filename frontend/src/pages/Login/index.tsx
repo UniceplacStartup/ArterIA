@@ -1,8 +1,10 @@
 /**
  * Página de Autenticação (Login) do Profissional de Saúde (RF01).
- * Integra com o endpoint `/api/auth/login` do Backend Python e armazena a sessão JWT.
+ * Permite entrar com a conta padrão (`medico@arteria.med.br` / `ArterIA@2026`)
+ * ou criar uma nova conta médica em `/cadastro-profissional` e fazer login em seguida.
  */
 
+import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, Controller } from 'react-hook-form';
 import {
@@ -11,9 +13,10 @@ import {
   Stack,
   Typography,
   Alert,
-  Link as MuiLink,
+  Divider,
 } from '@mui/material';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import axios from 'axios';
 import toast from 'react-hot-toast';
 import { loginSchema, type LoginFormData } from '@/schemas/login.schema';
 import {
@@ -28,19 +31,29 @@ import { useAuthStore } from '@/stores/authStore';
 
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const emailRecemCadastrado = searchParams.get('email');
   const loginStore = useAuthStore((s) => s.login);
 
   const {
     control,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: 'medico@arteria.med.br',
-      senha: 'ArterIA@2026',
+      email: emailRecemCadastrado ?? 'medico@arteria.med.br',
+      senha: emailRecemCadastrado ? '' : 'ArterIA@2026',
     },
   });
+
+  useEffect(() => {
+    if (emailRecemCadastrado) {
+      setValue('email', emailRecemCadastrado);
+      setValue('senha', '');
+    }
+  }, [emailRecemCadastrado, setValue]);
 
   const onSubmit = async (dados: LoginFormData) => {
     try {
@@ -48,10 +61,25 @@ export default function Login() {
       loginStore(resposta.usuario, resposta.token, resposta.refreshToken);
       toast.success(`Bem-vindo(a), ${resposta.usuario.nome}!`);
       navigate('/dashboard', { replace: true });
-    } catch {
-      toast.error('Credenciais inválidas ou conta temporariamente bloqueada.');
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const detalhe = (err.response?.data as { detail?: string } | undefined)
+          ?.detail;
+        if (typeof detalhe === 'string') {
+          toast.error(detalhe);
+          return;
+        }
+      }
+      toast.error(
+        'Não foi possível conectar ao servidor ou credenciais inválidas.',
+      );
     }
   };
+
+  function preencherContaPadrao() {
+    setValue('email', 'medico@arteria.med.br');
+    setValue('senha', 'ArterIA@2026');
+  }
 
   return (
     <PageWrapper>
@@ -67,10 +95,22 @@ export default function Login() {
           Acesso do Profissional
         </Typography>
 
-        <Alert severity="info" sx={{ mb: 2.5, fontSize: '0.8rem' }}>
-          Credencial médica inicial pronta para teste:{' '}
-          <strong>medico@arteria.med.br</strong> / <strong>ArterIA@2026</strong>
-        </Alert>
+        {emailRecemCadastrado ? (
+          <Alert severity="success" sx={{ mb: 2.5, fontSize: '0.82rem' }}>
+            Conta criada para <strong>{emailRecemCadastrado}</strong>! Digite
+            sua senha abaixo para entrar.
+          </Alert>
+        ) : (
+          <Alert
+            severity="info"
+            sx={{ mb: 2.5, fontSize: '0.8rem', cursor: 'pointer' }}
+            onClick={preencherContaPadrao}
+          >
+            Conta padrão pronta para uso:{' '}
+            <strong>medico@arteria.med.br</strong> /{' '}
+            <strong>ArterIA@2026</strong>
+          </Alert>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
           <Stack spacing={2.5}>
@@ -99,7 +139,7 @@ export default function Login() {
                 render={({ field }) => (
                   <TextField
                     {...field}
-                    placeholder="Sua senha segura"
+                    placeholder="Sua senha de acesso"
                     type="password"
                     autoComplete="current-password"
                     fullWidth
@@ -125,17 +165,21 @@ export default function Login() {
               {isSubmitting ? 'Autenticando...' : 'Entrar no Sistema'}
             </Button>
 
-            <Typography textAlign="center" fontSize="0.9rem">
-              Ainda não possui acesso?{' '}
-              <MuiLink
-                component={RouterLink}
-                to="/cadastro-profissional"
-                color="#a3226e"
-                fontWeight={600}
-              >
-                Solicitar cadastro médico
-              </MuiLink>
-            </Typography>
+            <Divider sx={{ my: 0.5 }}>ou</Divider>
+
+            <Button
+              variant="outlined"
+              size="large"
+              onClick={() => navigate('/cadastro-profissional')}
+              sx={{
+                py: 1.1,
+                borderColor: '#a3226e',
+                color: '#a3226e',
+                fontWeight: 700,
+              }}
+            >
+              Criar Nova Conta (Cadastrar Médico)
+            </Button>
           </Stack>
         </form>
       </FormCard>

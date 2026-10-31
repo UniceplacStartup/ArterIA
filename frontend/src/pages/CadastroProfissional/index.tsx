@@ -1,6 +1,7 @@
 /**
- * Página de Cadastro de Profissional de Saúde (Médico / Radiologista - RF01).
- * Valida CRM, UF e força de senha, integrando com o endpoint `/api/auth/registro`.
+ * Página de Cadastro de Conta do Profissional de Saúde (Médico / Radiologista - RF01).
+ * Cria a conta no banco de dados via `/api/auth/registro` e redireciona para a tela
+ * de Login (`/login`) com o e-mail recém-cadastrado já preenchido para autenticação.
  */
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -15,6 +16,7 @@ import {
   Link as MuiLink,
 } from '@mui/material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import toast from 'react-hot-toast';
 import {
   cadastroProfissionalSchema,
@@ -28,7 +30,6 @@ import {
 } from '@/components/AuthCard/AuthCard.styles';
 import { FieldWrapper } from '@/components/FieldWrapper/FieldWrapper';
 import { registrarProfissional } from '@/services/auth';
-import { useAuthStore } from '@/stores/authStore';
 
 const UFS = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO',
@@ -38,7 +39,6 @@ const UFS = [
 
 export default function CadastroProfissional() {
   const navigate = useNavigate();
-  const loginStore = useAuthStore((s) => s.login);
 
   const {
     control,
@@ -51,19 +51,30 @@ export default function CadastroProfissional() {
       email: '',
       senha: '',
       crm: '',
-      ufCrm: '',
+      ufCrm: 'DF',
     },
   });
 
   const onSubmit = async (data: CadastroProfissionalFormData) => {
     try {
-      const resposta = await registrarProfissional(data);
-      loginStore(resposta.usuario, resposta.token, resposta.refreshToken);
-      toast.success('Cadastro profissional realizado com sucesso!');
-      navigate('/dashboard', { replace: true });
-    } catch {
+      await registrarProfissional(data);
+      toast.success(
+        'Conta criada com sucesso! Agora faça login com seu e-mail e senha.',
+      );
+      navigate(`/login?email=${encodeURIComponent(data.email.trim())}`, {
+        replace: true,
+      });
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const detalhe = (err.response?.data as { detail?: string } | undefined)
+          ?.detail;
+        if (typeof detalhe === 'string') {
+          toast.error(detalhe);
+          return;
+        }
+      }
       toast.error(
-        'Não foi possível concluir o cadastro. Verifique se o e-mail ou CRM já estão registrados.',
+        'Não foi possível criar a conta. Verifique se o e-mail ou CRM já estão cadastrados ou se o servidor está ativo.',
       );
     }
   };
@@ -79,19 +90,19 @@ export default function CadastroProfissional() {
 
       <FormCard elevation={0}>
         <Typography variant="h6" fontWeight={700} textAlign="center" mb={3}>
-          Cadastro do Profissional
+          Criar Conta Médica (Cadastro)
         </Typography>
 
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
           <Stack spacing={2.5}>
-            <FieldWrapper label="Nome Completo">
+            <FieldWrapper label="Nome Completo do(a) Doutor(a)">
               <Controller
                 name="nomeCompleto"
                 control={control}
                 render={({ field }) => (
                   <TextField
                     {...field}
-                    placeholder="Nome Completo"
+                    placeholder="Ex.: Dr. Carlos Eduardo"
                     fullWidth
                     error={!!errors.nomeCompleto}
                     helperText={errors.nomeCompleto?.message}
@@ -100,14 +111,14 @@ export default function CadastroProfissional() {
               />
             </FieldWrapper>
 
-            <FieldWrapper label="E-mail">
+            <FieldWrapper label="E-mail para Login">
               <Controller
                 name="email"
                 control={control}
                 render={({ field }) => (
                   <TextField
                     {...field}
-                    placeholder="E-mail"
+                    placeholder="seu.email@clinica.med.br"
                     type="email"
                     fullWidth
                     error={!!errors.email}
@@ -117,14 +128,14 @@ export default function CadastroProfissional() {
               />
             </FieldWrapper>
 
-            <FieldWrapper label="Senha">
+            <FieldWrapper label="Senha de Acesso">
               <Controller
                 name="senha"
                 control={control}
                 render={({ field }) => (
                   <TextField
                     {...field}
-                    placeholder="Mínimo de 8 caracteres (letras e números)"
+                    placeholder="Mínimo de 6 caracteres"
                     type="password"
                     fullWidth
                     error={!!errors.senha}
@@ -142,14 +153,14 @@ export default function CadastroProfissional() {
                 rowGap: 2.5,
               }}
             >
-              <FieldWrapper label="CRM">
+              <FieldWrapper label="Número do CRM">
                 <Controller
                   name="crm"
                   control={control}
                   render={({ field }) => (
                     <TextField
                       {...field}
-                      placeholder="CRM"
+                      placeholder="Ex.: 123456"
                       fullWidth
                       error={!!errors.crm}
                       helperText={errors.crm?.message}
@@ -170,9 +181,6 @@ export default function CadastroProfissional() {
                       error={!!errors.ufCrm}
                       helperText={errors.ufCrm?.message}
                     >
-                      <MenuItem value="" disabled>
-                        Selecione
-                      </MenuItem>
                       {UFS.map((uf) => (
                         <MenuItem key={uf} value={uf}>
                           {uf}
@@ -196,7 +204,7 @@ export default function CadastroProfissional() {
                 '&:hover': { backgroundColor: '#861b5a' },
               }}
             >
-              {isSubmitting ? 'Registrando...' : 'Solicitar Acesso'}
+              {isSubmitting ? 'Criando conta...' : 'Criar Conta e Ir para Login'}
             </Button>
 
             <Typography textAlign="center" fontSize="0.9rem">
@@ -207,7 +215,7 @@ export default function CadastroProfissional() {
                 color="#a3226e"
                 fontWeight={600}
               >
-                Fazer login
+                Voltar para o Login
               </MuiLink>
             </Typography>
           </Stack>
